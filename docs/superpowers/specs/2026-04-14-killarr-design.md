@@ -102,7 +102,7 @@ Config source is controlled via `KILLARR_CONFIG_SOURCE=file|env` (mirrors rangar
 
 Each cycle iterates over all active clients:
 
-1. **Fetch stalled queue items** — `GET /api/v3/queue` filtered to records where `trackedDownloadStatus == "warning"`. Batch size controls max items processed.
+1. **Fetch stalled queue items** — `GET /api/v3/queue` (paginated). The arr API does not support server-side filtering by status, so killarr fetches all queue records and filters client-side to those where `trackedDownloadStatus == "warning"`. Batch size controls max items acted on after filtering.
 2. **Apply tag filtering** — same `include_tags`/`exclude_tags` logic as rangarr, resolved via `GET /api/v3/tag` at startup.
 3. **Remove each item** with stagger between:
    - `DELETE /api/v3/queue/{id}?removeFromClient={bool}&blocklist={bool}`
