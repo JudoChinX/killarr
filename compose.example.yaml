@@ -1,0 +1,23 @@
+services:
+  killarr:
+    image: killarr:latest
+    container_name: killarr
+    restart: unless-stopped
+    volumes:
+      # Mount the same config.yaml you use for rangarr (or a dedicated one)
+      - ./config.yaml:/app/config/config.yaml:ro
+    environment:
+      - LOG_LEVEL=INFO
+      # To configure via env vars instead of a file:
+      # - KILLARR_CONFIG_SOURCE=env
+      # - KILLARR_GLOBAL_INTERVAL=3600
+      # - KILLARR_INSTANCE_0_NAME=Radarr
+      # - KILLARR_INSTANCE_0_TYPE=radarr
+      # - KILLARR_INSTANCE_0_URL=http://radarr:7878
+      # - KILLARR_INSTANCE_0_API_KEY=YOUR_KEY
+    networks:
+      - arr-network
+
+networks:
+  arr-network:
+    external: true  # Must match the network your *arr containers use

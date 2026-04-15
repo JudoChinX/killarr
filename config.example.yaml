@@ -1,0 +1,52 @@
+# Killarr Configuration
+# Killarr can share this file with Rangarr. Both tools read the shared
+# `instances:` section. Each tool reads its own top-level section
+# (`global:` for Rangarr, `killarr:` for Killarr) and ignores the other's.
+#
+# Mount this file at /app/config/config.yaml in your container.
+
+# --- Rangarr settings (ignored by Killarr) ---
+# global:
+#   interval: 3600
+#   missing_batch_size: 20
+
+# --- Killarr settings ---
+killarr:
+  interval: 3600              # Run every hour (seconds)
+  stagger_interval_seconds: 5 # Wait between individual removals
+
+  # batch_size: 10            # Max stalled items to remove per cycle (default)
+  # batch_size: -1            # Remove all stalled items each cycle (unlimited)
+  # batch_size: 0             # Disable removal entirely
+
+  remove_from_client: true    # Delete the file from the download client
+  blocklist: true             # Blocklist the release (prevents re-grabbing)
+  search_again: true          # Trigger a fresh search after removal
+
+  # include_tags: ["active"]  # Only act on items with ANY of these tags
+  # exclude_tags: ["protected"] # Skip items with ANY of these tags
+
+  dry_run: false              # Set to true to log without making changes
+
+# --- Shared instance definitions ---
+instances:
+  radarr:
+    type: radarr
+    host: "http://radarr:7878"       # Use container hostname for Docker
+    api_key: "YOUR_RADARR_API_KEY"
+    enabled: true
+    # killarr:                       # Per-instance Killarr overrides (optional)
+    #   batch_size: 5
+    #   blocklist: false
+
+  sonarr:
+    type: sonarr
+    host: "http://sonarr:8989"
+    api_key: "YOUR_SONARR_API_KEY"
+    enabled: false                   # Set to true to activate
+
+  lidarr:
+    type: lidarr
+    host: "http://lidarr:8686"
+    api_key: "YOUR_LIDARR_API_KEY"
+    enabled: false
