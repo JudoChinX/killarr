@@ -1,0 +1,11 @@
+killarr:
+  interval: 1800
+  batch_size: 5
+  dry_run: true
+
+instances:
+  radarr:
+    type: radarr
+    host: "http://radarr:7878"
+    api_key: "testkey123"
+    enabled: true
