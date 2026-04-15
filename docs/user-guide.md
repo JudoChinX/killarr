@@ -346,6 +346,16 @@ Each instance is identified by a numeric index. Prefix instance fields with `KIL
 | `KILLARR_INSTANCE_<n>_ENABLED` | No | Defaults to `true`. |
 | `KILLARR_INSTANCE_<n>_WEIGHT` | No | Relative removal weight. Defaults to `1`. |
 
+#### Shared Instances with Rangarr
+
+If you already have Rangarr configured via `RANGARR_INSTANCE_*` environment variables, you can tell Killarr to read those instead of defining a separate `KILLARR_INSTANCE_*` set:
+
+```bash
+KILLARR_INSTANCE_SOURCE=shared
+```
+
+When set, Killarr reads `RANGARR_INSTANCE_<n>_*` for all instance definitions. `KILLARR_GLOBAL_*` settings still apply as normal. This is the env-var equivalent of pointing both tools at the same `config.yaml`.
+
 #### Example
 
 ```bash
@@ -362,6 +372,21 @@ KILLARR_INSTANCE_1_NAME=TV
 KILLARR_INSTANCE_1_TYPE=sonarr
 KILLARR_INSTANCE_1_URL=http://sonarr:8989
 KILLARR_INSTANCE_1_API_KEY=your-api-key
+```
+
+Or, if Rangarr is already configured:
+
+```bash
+# Killarr-specific settings
+KILLARR_CONFIG_SOURCE=env
+KILLARR_GLOBAL_DRY_RUN=false
+KILLARR_INSTANCE_SOURCE=shared  # Read instances from RANGARR_INSTANCE_* vars
+
+# Shared instance definitions (read by both Rangarr and Killarr)
+RANGARR_INSTANCE_0_NAME=Movies
+RANGARR_INSTANCE_0_TYPE=radarr
+RANGARR_INSTANCE_0_URL=http://radarr:7878
+RANGARR_INSTANCE_0_API_KEY=your-api-key
 ```
 
 ---

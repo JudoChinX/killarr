@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `KILLARR_INSTANCE_SOURCE=shared`: when set, Killarr reads `RANGARR_INSTANCE_*` environment variables for instance definitions instead of `KILLARR_INSTANCE_*`, mirroring the shared `config.yaml` experience for env-var deployments
+
 ## [0.1.0] - 2026-04-15
 
 ### Added
