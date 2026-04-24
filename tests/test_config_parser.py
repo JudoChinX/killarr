@@ -60,10 +60,7 @@ _get_setting_default_cases = {
 
 @pytest.mark.parametrize(
     'setting, expected',
-    [
-        (case['setting'], case['expected'])
-        for case in _get_setting_default_cases.values()
-    ],
+    [(case['setting'], case['expected']) for case in _get_setting_default_cases.values()],
     ids=list(_get_setting_default_cases.keys()),
 )
 def test_get_setting_default(setting: Any, expected: Any) -> None:
@@ -124,7 +121,9 @@ _parse_config_cases = {
         'expected_error': "Missing 'type' field for instance 'r'. Must be one of: radarr, sonarr, lidarr.",
     },
     'invalid_type_raises': {
-        'config_data': make_config(instances={'r': {'type': 'plex', 'host': 'http://x', 'api_key': 'k', 'enabled': True}}),
+        'config_data': make_config(
+            instances={'r': {'type': 'plex', 'host': 'http://x', 'api_key': 'k', 'enabled': True}}
+        ),
         'expected_error': "Invalid type 'plex' for instance 'r'. Must be one of: radarr, sonarr, lidarr.",
     },
     'invalid_batch_size_raises': {
@@ -137,9 +136,7 @@ _parse_config_cases = {
     },
     'no_enabled_instances_raises': {
         'config_data': {
-            'instances': {
-                'radarr': {'type': 'radarr', 'host': 'http://x', 'api_key': 'k', 'enabled': False}
-            }
+            'instances': {'radarr': {'type': 'radarr', 'host': 'http://x', 'api_key': 'k', 'enabled': False}}
         },
         'expected_error': "No instances defined under 'instances'. Add at least one Radarr, Sonarr, or Lidarr instance.",
     },
@@ -148,9 +145,9 @@ _parse_config_cases = {
         'expected_error': "Missing or empty 'api_key' for instance 'r'.",
     },
     'instance_invalid_weight_raises': {
-        'config_data': make_config(instances={
-            'r': {'type': 'radarr', 'host': 'http://x', 'api_key': 'k', 'enabled': True, 'weight': -1}
-        }),
+        'config_data': make_config(
+            instances={'r': {'type': 'radarr', 'host': 'http://x', 'api_key': 'k', 'enabled': True, 'weight': -1}}
+        ),
         'expected_error': "'weight' for instance 'r' must be a positive number.",
     },
     'wrong_type_for_setting_raises': {
@@ -166,10 +163,12 @@ _parse_config_cases = {
         'expected_error': "'killarr.include_tags' entries must not be empty strings.",
     },
     'instances_grouped_by_type': {
-        'config_data': make_config(instances={
-            'r1': {'type': 'radarr', 'host': 'http://r1', 'api_key': 'k1', 'enabled': True},
-            's1': {'type': 'sonarr', 'host': 'http://s1', 'api_key': 'k2', 'enabled': True},
-        }),
+        'config_data': make_config(
+            instances={
+                'r1': {'type': 'radarr', 'host': 'http://r1', 'api_key': 'k1', 'enabled': True},
+                's1': {'type': 'sonarr', 'host': 'http://s1', 'api_key': 'k2', 'enabled': True},
+            }
+        ),
         'expected_result': {
             'instances': {
                 'radarr': [{'name': 'r1'}],
@@ -184,10 +183,12 @@ _parse_config_cases = {
         },
     },
     'disabled_instance_excluded': {
-        'config_data': make_config(instances={
-            'active': {'type': 'radarr', 'host': 'http://a', 'api_key': 'k', 'enabled': True},
-            'inactive': {'type': 'radarr', 'host': 'http://b', 'api_key': 'k', 'enabled': False},
-        }),
+        'config_data': make_config(
+            instances={
+                'active': {'type': 'radarr', 'host': 'http://a', 'api_key': 'k', 'enabled': True},
+                'inactive': {'type': 'radarr', 'host': 'http://b', 'api_key': 'k', 'enabled': False},
+            }
+        ),
         'expected_result': {
             'instances': {'radarr': [{'name': 'active'}]},
         },
@@ -197,7 +198,10 @@ _parse_config_cases = {
             killarr_section={'batch_size': 10, 'blocklist': True},
             instances={
                 'r': {
-                    'type': 'radarr', 'host': 'http://r', 'api_key': 'k', 'enabled': True,
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
                     'killarr': {'batch_size': 3, 'blocklist': False},
                 }
             },
@@ -236,9 +240,7 @@ def test_parse_config_instance_without_killarr_override_has_no_instance_setting(
     """Test that instance-level settings are absent when there is no per-instance killarr override."""
     config = make_config(
         killarr_section={'batch_size': 7},
-        instances={
-            'r': {'type': 'radarr', 'host': 'http://r', 'api_key': 'k', 'enabled': True}
-        },
+        instances={'r': {'type': 'radarr', 'host': 'http://r', 'api_key': 'k', 'enabled': True}},
     )
     result = parse_config(config)
     assert 'batch_size' not in result['instances']['radarr'][0]
@@ -246,10 +248,12 @@ def test_parse_config_instance_without_killarr_override_has_no_instance_setting(
 
 # --- load_config from file ---
 
+
 def test_load_config_from_file(tmp_path: Any) -> None:
     """Test load_config reads and parses a YAML file correctly."""
     cfg = tmp_path / 'config.yaml'
-    cfg.write_text(textwrap.dedent("""
+    cfg.write_text(
+        textwrap.dedent("""
         killarr:
           interval: 900
           batch_size: 3
@@ -260,7 +264,8 @@ def test_load_config_from_file(tmp_path: Any) -> None:
             host: "http://radarr:7878"
             api_key: "abc123"
             enabled: true
-    """))
+    """)
+    )
     result = load_config(str(cfg))
     assert result['global_settings']['interval'] == 900
     assert result['global_settings']['batch_size'] == 3
@@ -277,14 +282,16 @@ def test_load_config_env_var_expansion(tmp_path: Any, monkeypatch: Any) -> None:
     """Test load_config expands ${VAR} placeholders from environment variables."""
     monkeypatch.setenv('MY_API_KEY', 'secret')
     cfg = tmp_path / 'config.yaml'
-    cfg.write_text(textwrap.dedent("""
+    cfg.write_text(
+        textwrap.dedent("""
         instances:
           radarr:
             type: radarr
             host: "http://radarr:7878"
             api_key: "${MY_API_KEY}"
             enabled: true
-    """))
+    """)
+    )
     result = load_config(str(cfg))
     assert result['instances']['radarr'][0]['api_key'] == 'secret'
 
@@ -292,22 +299,27 @@ def test_load_config_env_var_expansion(tmp_path: Any, monkeypatch: Any) -> None:
 def test_load_config_env_var_missing_raises(tmp_path: Any) -> None:
     """Test load_config raises ValueError when a ${VAR} placeholder is not set."""
     cfg = tmp_path / 'config.yaml'
-    cfg.write_text(textwrap.dedent("""
+    cfg.write_text(
+        textwrap.dedent("""
         instances:
           radarr:
             type: radarr
             host: "http://radarr:7878"
             api_key: "${MISSING_VAR}"
             enabled: true
-    """))
-    with pytest.raises(ValueError, match=re.escape("Environment variable 'MISSING_VAR' referenced in config is not set.")):
+    """)
+    )
+    with pytest.raises(
+        ValueError, match=re.escape("Environment variable 'MISSING_VAR' referenced in config is not set.")
+    ):
         load_config(str(cfg))
 
 
 def test_load_config_rangarr_shared_config_no_killarr_section(tmp_path: Any) -> None:
     """Test killarr gracefully handles a config written for rangarr (no killarr: section)."""
     cfg = tmp_path / 'config.yaml'
-    cfg.write_text(textwrap.dedent("""
+    cfg.write_text(
+        textwrap.dedent("""
         global:
           interval: 3600
           missing_batch_size: 20
@@ -318,7 +330,8 @@ def test_load_config_rangarr_shared_config_no_killarr_section(tmp_path: Any) -> 
             host: "http://radarr:7878"
             api_key: "key"
             enabled: true
-    """))
+    """)
+    )
     result = load_config(str(cfg))
     assert result['global_settings']['interval'] == 3600
     assert result['global_settings']['batch_size'] == 10
@@ -336,7 +349,8 @@ def test_expand_env_vars_in_list(tmp_path: Any, monkeypatch: Any) -> None:
     """Test load_config expands ${VAR} placeholders inside YAML list values."""
     monkeypatch.setenv('TAG_ONE', 'stalled')
     cfg = tmp_path / 'config.yaml'
-    cfg.write_text(textwrap.dedent("""
+    cfg.write_text(
+        textwrap.dedent("""
         killarr:
           include_tags:
             - "${TAG_ONE}"
@@ -346,7 +360,8 @@ def test_expand_env_vars_in_list(tmp_path: Any, monkeypatch: Any) -> None:
             host: "http://r"
             api_key: "k"
             enabled: true
-    """))
+    """)
+    )
     result = load_config(str(cfg))
     assert result['global_settings']['include_tags'] == ['stalled']
 
@@ -573,10 +588,7 @@ _load_config_from_env_shared_cases = {
 
 @pytest.mark.parametrize(
     'env_vars, expected_result',
-    [
-        (case['env_vars'], case['expected_result'])
-        for case in _load_config_from_env_shared_cases.values()
-    ],
+    [(case['env_vars'], case['expected_result']) for case in _load_config_from_env_shared_cases.values()],
     ids=list(_load_config_from_env_shared_cases.keys()),
 )
 def test_load_config_from_env_shared(monkeypatch: Any, env_vars: Any, expected_result: Any) -> None:

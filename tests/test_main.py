@@ -37,10 +37,7 @@ _get_setting_cases = {
 
 @pytest.mark.parametrize(
     'settings, key, expected',
-    [
-        (case['settings'], case['key'], case['expected'])
-        for case in _get_setting_cases.values()
-    ],
+    [(case['settings'], case['key'], case['expected']) for case in _get_setting_cases.values()],
     ids=list(_get_setting_cases.keys()),
 )
 def test_get_setting(settings: Any, key: Any, expected: Any) -> None:
@@ -50,6 +47,7 @@ def test_get_setting(settings: Any, key: Any, expected: Any) -> None:
 
 # --- build_arr_clients ---
 
+
 def _make_instances_config(
     arr_type: str = 'radarr',
     name: str = 'TestRadarr',
@@ -58,9 +56,7 @@ def _make_instances_config(
     weight: float = 1.0,
 ) -> dict:
     """Build a minimal instances config dict for build_arr_clients."""
-    return {
-        arr_type: [{'name': name, 'url': url, 'api_key': api_key, 'weight': weight}]
-    }
+    return {arr_type: [{'name': name, 'url': url, 'api_key': api_key, 'weight': weight}]}
 
 
 _build_arr_clients_cases = {
@@ -108,18 +104,14 @@ def test_build_arr_clients_sets_name() -> None:
 
 def test_build_arr_clients_merges_instance_overrides() -> None:
     """Test that per-instance settings override global settings."""
-    instances = {
-        'radarr': [{'name': 'R', 'url': 'http://r', 'api_key': 'k', 'weight': 1.0, 'batch_size': 3}]
-    }
+    instances = {'radarr': [{'name': 'R', 'url': 'http://r', 'api_key': 'k', 'weight': 1.0, 'batch_size': 3}]}
     clients = build_arr_clients(instances, {'batch_size': 10})
     assert clients[0].batch_size == 3
 
 
 def test_build_arr_clients_uses_global_settings_when_no_override() -> None:
     """Test that global settings are used when no per-instance override is present."""
-    instances = {
-        'radarr': [{'name': 'R', 'url': 'http://r', 'api_key': 'k', 'weight': 1.0}]
-    }
+    instances = {'radarr': [{'name': 'R', 'url': 'http://r', 'api_key': 'k', 'weight': 1.0}]}
     clients = build_arr_clients(instances, {'batch_size': 7})
     assert clients[0].batch_size == 7
 
@@ -142,6 +134,7 @@ def test_build_arr_clients_returns_empty_for_empty_config() -> None:
 
 
 # --- _run_removal_cycle ---
+
 
 def _make_mock_client(name: str = 'TestClient', stalled_items: list | None = None) -> MagicMock:
     """Build a mock arr client with a configurable get_stalled_items return value."""
@@ -213,11 +206,13 @@ def test_run_removal_cycle_logs_no_stalled_when_empty(caplog: Any) -> None:
 
 # --- run() integration ---
 
+
 def test_run_exits_when_no_config() -> None:
     """Test that run() exits with code 1 when no config file can be loaded."""
     with patch('killarr.main._load_config_from_paths', return_value=None):
         with pytest.raises(SystemExit) as exc_info:
             from killarr.main import run
+
             run()
     assert exc_info.value.code == 1
 
@@ -231,19 +226,20 @@ def test_run_exits_when_no_active_clients() -> None:
     with patch('killarr.main._load_config_from_paths', return_value=config):
         with pytest.raises(SystemExit) as exc_info:
             from killarr.main import run
+
             run()
     assert exc_info.value.code == 1
 
 
 # --- _load_config_from_paths ---
 
+
 def test_load_config_from_paths_loads_existing_file(tmp_path: Any) -> None:
     """Test that _load_config_from_paths parses a valid config file."""
     from killarr.main import _load_config_from_paths
+
     cfg = tmp_path / 'config.yaml'
-    cfg.write_text(
-        "instances:\n  r:\n    type: radarr\n    host: http://r\n    api_key: k\n    enabled: true\n"
-    )
+    cfg.write_text('instances:\n  r:\n    type: radarr\n    host: http://r\n    api_key: k\n    enabled: true\n')
     result = _load_config_from_paths([str(cfg)])
     assert result is not None
     assert 'global_settings' in result
@@ -252,6 +248,7 @@ def test_load_config_from_paths_loads_existing_file(tmp_path: Any) -> None:
 def test_load_config_from_paths_returns_none_when_no_files(tmp_path: Any) -> None:
     """Test that _load_config_from_paths returns None when no paths exist."""
     from killarr.main import _load_config_from_paths
+
     result = _load_config_from_paths([str(tmp_path / 'nonexistent.yaml')])
     assert result is None
 
@@ -259,8 +256,9 @@ def test_load_config_from_paths_returns_none_when_no_files(tmp_path: Any) -> Non
 def test_load_config_from_paths_returns_none_on_value_error(tmp_path: Any) -> None:
     """Test that _load_config_from_paths returns None when the config fails validation."""
     from killarr.main import _load_config_from_paths
+
     cfg = tmp_path / 'bad.yaml'
-    cfg.write_text("killarr:\n  interval: 60\n")
+    cfg.write_text('killarr:\n  interval: 60\n')
     result = _load_config_from_paths([str(cfg)])
     assert result is None
 
@@ -268,19 +266,20 @@ def test_load_config_from_paths_returns_none_on_value_error(tmp_path: Any) -> No
 def test_load_config_from_paths_skips_missing_tries_next(tmp_path: Any) -> None:
     """Test that _load_config_from_paths skips missing files and loads the next valid one."""
     from killarr.main import _load_config_from_paths
+
     good = tmp_path / 'config.yaml'
-    good.write_text(
-        "instances:\n  r:\n    type: radarr\n    host: http://r\n    api_key: k\n    enabled: true\n"
-    )
+    good.write_text('instances:\n  r:\n    type: radarr\n    host: http://r\n    api_key: k\n    enabled: true\n')
     result = _load_config_from_paths([str(tmp_path / 'missing.yaml'), str(good)])
     assert result is not None
 
 
 # --- _log_killarr_start ---
 
+
 def test_log_killarr_start_logs_instance_count(caplog: Any) -> None:
     """Test that _log_killarr_start logs the number of active instances."""
     from killarr.main import _log_killarr_start
+
     clients = [MagicMock(), MagicMock()]
     with caplog.at_level(logging.INFO):
         _log_killarr_start(clients, {})
@@ -290,6 +289,7 @@ def test_log_killarr_start_logs_instance_count(caplog: Any) -> None:
 def test_log_killarr_start_shows_dry_run(caplog: Any) -> None:
     """Test that _log_killarr_start logs DRY RUN when dry_run is True."""
     from killarr.main import _log_killarr_start
+
     with caplog.at_level(logging.INFO):
         _log_killarr_start([MagicMock()], {'dry_run': True})
     assert 'DRY RUN' in caplog.text
@@ -298,6 +298,7 @@ def test_log_killarr_start_shows_dry_run(caplog: Any) -> None:
 def test_log_killarr_start_shows_disabled_batch(caplog: Any) -> None:
     """Test that _log_killarr_start logs 'Disabled' when batch_size is 0."""
     from killarr.main import _log_killarr_start
+
     with caplog.at_level(logging.INFO):
         _log_killarr_start([MagicMock()], {'batch_size': 0})
     assert 'Disabled' in caplog.text
@@ -306,12 +307,14 @@ def test_log_killarr_start_shows_disabled_batch(caplog: Any) -> None:
 def test_log_killarr_start_shows_unlimited_batch(caplog: Any) -> None:
     """Test that _log_killarr_start logs 'Unlimited' when batch_size is -1."""
     from killarr.main import _log_killarr_start
+
     with caplog.at_level(logging.INFO):
         _log_killarr_start([MagicMock()], {'batch_size': -1})
     assert 'Unlimited' in caplog.text
 
 
 # --- run() env and unrecognized source ---
+
 
 def test_run_env_source_loads_from_env(monkeypatch: Any) -> None:
     """Test that run() uses env-var config when KILLARR_CONFIG_SOURCE=env."""
@@ -321,12 +324,14 @@ def test_run_env_source_loads_from_env(monkeypatch: Any) -> None:
     monkeypatch.setenv('KILLARR_INSTANCE_0_URL', 'http://r')
     monkeypatch.setenv('KILLARR_INSTANCE_0_API_KEY', 'k')
     from killarr.main import run
+
     call_count = 0
 
     def fake_sleep(_interval: float) -> None:
         nonlocal call_count
         call_count += 1
         raise KeyboardInterrupt
+
     with patch('time.sleep', side_effect=fake_sleep):
         with pytest.raises(KeyboardInterrupt):
             run()
@@ -337,6 +342,7 @@ def test_run_env_source_exits_on_value_error(monkeypatch: Any) -> None:
     """Test that run() exits with code 1 when env-var config raises a ValueError."""
     monkeypatch.setenv('KILLARR_CONFIG_SOURCE', 'env')
     from killarr.main import run
+
     with patch('killarr.main.load_config_from_env', side_effect=ValueError('bad')):
         with pytest.raises(SystemExit) as exc_info:
             run()
@@ -347,6 +353,7 @@ def test_run_unrecognized_source_warns(monkeypatch: Any, caplog: Any) -> None:
     """Test that run() logs a warning and exits when KILLARR_CONFIG_SOURCE is unrecognized."""
     monkeypatch.setenv('KILLARR_CONFIG_SOURCE', 'database')
     from killarr.main import run
+
     with patch('killarr.main._load_config_from_paths', return_value=None):
         with caplog.at_level(logging.WARNING):
             with pytest.raises(SystemExit):
@@ -359,15 +366,20 @@ def test_run_loop_executes_cycle_and_sleeps(monkeypatch: Any) -> None:
     monkeypatch.delenv('KILLARR_CONFIG_SOURCE', raising=False)
     config = {
         'global_settings': {'interval': 10},
-        'instances': {'radarr': [{'name': 'R', 'url': 'http://r', 'api_key': 'k', 'weight': 1.0}],
-                      'sonarr': [], 'lidarr': []},
+        'instances': {
+            'radarr': [{'name': 'R', 'url': 'http://r', 'api_key': 'k', 'weight': 1.0}],
+            'sonarr': [],
+            'lidarr': [],
+        },
     }
     from killarr.main import run
+
     sleep_calls: list[float] = []
 
     def fake_sleep(interval: float) -> None:
         sleep_calls.append(interval)
         raise KeyboardInterrupt
+
     with patch('killarr.main._load_config_from_paths', return_value=config):
         with patch('time.sleep', side_effect=fake_sleep):
             with pytest.raises(KeyboardInterrupt):

@@ -56,6 +56,7 @@ def test_client_warns_on_non_https_url(caplog: Any) -> None:
 
 # --- Tag resolution ---
 
+
 def test_resolve_tag_ids_maps_names_to_ids() -> None:
     """Test that include_tags names are resolved to tag IDs from the *arr API."""
     tags = [{'id': 1, 'label': 'stalled'}, {'id': 2, 'label': 'active'}]
@@ -90,6 +91,7 @@ def test_tag_resolution_network_error_logs_error(caplog: Any) -> None:
 
 
 # --- Queue fetch and stall filtering ---
+
 
 def test_fetch_all_queue_returns_records() -> None:
     """Test that _fetch_all_queue returns all records from the queue response."""
@@ -151,10 +153,7 @@ _is_stalled_cases = {
 
 @pytest.mark.parametrize(
     'record, expected',
-    [
-        (case['record'], case['expected'])
-        for case in _is_stalled_cases.values()
-    ],
+    [(case['record'], case['expected']) for case in _is_stalled_cases.values()],
     ids=list(_is_stalled_cases.keys()),
 )
 def test_is_stalled(record: Any, expected: Any) -> None:
@@ -164,6 +163,7 @@ def test_is_stalled(record: Any, expected: Any) -> None:
 
 
 # --- get_stalled_items ---
+
 
 def test_get_stalled_items_returns_only_warning_items() -> None:
     """Test that get_stalled_items filters out non-warning records."""
@@ -246,6 +246,7 @@ def test_get_stalled_items_skips_tag_filtered_logs_debug(caplog: Any) -> None:
 
 
 # --- Remove and search-again ---
+
 
 def test_remove_stalled_calls_delete_for_each_item() -> None:
     """Test that remove_stalled issues one DELETE request per stalled item."""
@@ -396,10 +397,7 @@ _subclass_attr_cases = {
 
 @pytest.mark.parametrize(
     'arr_type, attr, expected',
-    [
-        (case['arr_type'], case['attr'], case['expected'])
-        for case in _subclass_attr_cases.values()
-    ],
+    [(case['arr_type'], case['attr'], case['expected']) for case in _subclass_attr_cases.values()],
     ids=list(_subclass_attr_cases.keys()),
 )
 def test_subclass_attr(arr_type: Any, attr: Any, expected: Any) -> None:
@@ -421,10 +419,7 @@ _endpoint_version_cases = {
 
 @pytest.mark.parametrize(
     'arr_type, endpoint_attr, version',
-    [
-        (case['arr_type'], case['endpoint_attr'], case['version'])
-        for case in _endpoint_version_cases.values()
-    ],
+    [(case['arr_type'], case['endpoint_attr'], case['version']) for case in _endpoint_version_cases.values()],
     ids=list(_endpoint_version_cases.keys()),
 )
 def test_subclass_endpoint_version(arr_type: Any, endpoint_attr: Any, version: Any) -> None:
@@ -434,6 +429,7 @@ def test_subclass_endpoint_version(arr_type: Any, endpoint_attr: Any, version: A
 
 
 # --- Subclass media ID and title extraction ---
+
 
 def test_radarr_get_media_id() -> None:
     """Test that RadarrClient._get_media_id extracts the movieId field."""
