@@ -28,9 +28,10 @@ def assert_config_result(result: Any, expected: Any) -> None:
             raise AssertionError(f"Unknown expected key: '{key}'")
 
 
-def mock_http_response(data: Any = None) -> MagicMock:
+def mock_http_response(data: Any = None, status_code: int = 200) -> MagicMock:
     """Return a mock HTTP response with raise_for_status and json()."""
     mock = MagicMock()
+    mock.status_code = status_code
     mock.raise_for_status.return_value = None
     mock.json.return_value = data
     return mock

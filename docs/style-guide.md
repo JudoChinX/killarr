@@ -135,7 +135,7 @@ def build_arr_clients(...): ...
 | Public module constant | `UPPER_CASE` | `ENDPOINT_QUEUE`, `SETTINGS_SCHEMA` |
 | Private module constant | `_UPPER_CASE` | `_CLIENT_MAP` |
 | Class | `PascalCase` | `ArrClient`, `RadarrClient`, `ClientBuilder` |
-| Type alias | `type Name = ...` | `type QueueItem = tuple[int, int, str]` |
+| Type alias | `type Name = ...` | `type QueueItem = tuple[int, int, str, str]` |
 | Test case dict | `_snake_case_cases` | `_parse_config_cases`, `_is_stalled_cases` |
 | Builder class | `<Subject>Builder` | `ClientBuilder`, `RadarrQueueBuilder` |
 
@@ -183,7 +183,7 @@ _CLIENT_MAP: dict[str, type[ArrClient]] = {
     'sonarr': SonarrClient,
 }
 
-type QueueItem = tuple[int, int, str]
+type QueueItem = tuple[int, int, str, str]
 
 
 def _get_setting(settings: dict, key: str) -> Any:
@@ -316,10 +316,10 @@ Use the `type` keyword (Python 3.12+ PEP 695 syntax) for module-level type alias
 
 ```python
 # Do (from arr.py)
-type QueueItem = tuple[int, int, str]
+type QueueItem = tuple[int, int, str, str]
 
 # Don't
-QueueItem = tuple[int, int, str]
+QueueItem = tuple[int, int, str, str]
 ```
 
 ### Self for Fluent Builders
@@ -475,7 +475,7 @@ _parse_config_cases = {
     'no_killarr_section_uses_defaults': {
         'config_data': make_config(),
         'expected_result': {
-            'global_settings': {'interval': 3600, 'batch_size': 10},
+            'global_settings': {'interval': 3600, 'batch_size': 10, 'stagger_interval_seconds': 5},
         },
     },
     'missing_instances_raises': {
@@ -530,7 +530,7 @@ record = RadarrQueueBuilder().warning().with_id(99).with_movie_id(42).build()
 
 # Don't — inline construction
 client = RadarrClient(name='test', url='http://test', api_key='key', settings={})
-record = {'id': 99, 'movieId': 42, 'trackedDownloadStatus': 'warning', 'tags': []}
+record = {'id': 99, 'movieId': 42, 'trackedDownloadStatus': 'warning', 'tags': [], 'action': 'remove'}
 ```
 
 ### Error String Matching
@@ -567,6 +567,56 @@ def test_parse_config_missing_instances_raises_case(...): ...  # scenario alread
 
 Declare fixtures with `@pytest.fixture` at the top of the test file, before the first test.
 For fixtures shared across files, use `tests/conftest.py`.
+
+Annotate `yield`-based fixtures with `Generator[None, None, None]` — mypy enforces return types
+on all functions including fixtures:
+
+```python
+# Do (from conftest.py)
+from collections.abc import Generator
+
+
+@pytest.fixture(autouse=True)
+def mock_sleep() -> Generator[None, None, None]:
+    """Block real sleeping in tests for speed and determinism."""
+    with patch('time.sleep'):
+        yield
+
+
+# Don't — missing return type annotation (mypy will flag this)
+@pytest.fixture(autouse=True)
+def mock_sleep():
+    with patch('time.sleep'):
+        yield
+```
+
+`tests/conftest.py` provides two `autouse` fixtures active for every test:
+
+- `block_external_requests` — patches `requests.Session.request` to raise `RuntimeError` on any
+  unmocked HTTP call. This is the enforcement layer; if a test hits the network it fails loudly.
+- `mock_sleep` — patches `time.sleep` to prevent real sleeping and keep tests deterministic.
+
+### Mocking HTTP Sessions
+
+Use instance-level assignment when the client object is available in the test:
+
+```python
+# Do — instance-level (test_arr_client.py)
+client = ClientBuilder().radarr().build()
+client.session.get = MagicMock(return_value=mock_queue_response(records))
+```
+
+Use class-level `patch` when the client is constructed internally (e.g., tests that call
+`run()` directly and don't have access to the client instance):
+
+```python
+# Do — class-level (integration tests in test_main.py)
+with patch('requests.Session.get', return_value=mock_queue_response([])):
+    run()
+```
+
+Both approaches bypass the `block_external_requests` fixture safely: replacing `get` at either
+level prevents the call from reaching `request`, so the fixture's `RuntimeError` is never raised.
 
 ### Log Assertions
 

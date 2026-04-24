@@ -10,9 +10,6 @@ from killarr.clients.arr import SonarrClient
 
 DEFAULT_SETTINGS = {
     'batch_size': 10,
-    'remove_from_client': True,
-    'blocklist': True,
-    'search_again': True,
     'stagger_interval_seconds': 0,
     'dry_run': False,
     'include_tags': [],
@@ -42,6 +39,11 @@ class _QueueRecordBuilder:
     def with_id(self, queue_id: int) -> Self:
         """Set the queue record ID."""
         self._data['id'] = queue_id
+        return self
+
+    def with_status_messages(self, messages: list[str]) -> Self:
+        """Set statusMessages with a single message group."""
+        self._data['statusMessages'] = [{'messages': messages}]
         return self
 
     def with_title(self, title: str) -> Self:

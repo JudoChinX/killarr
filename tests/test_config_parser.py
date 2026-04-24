@@ -50,9 +50,6 @@ MINIMAL_INSTANCE = {
 _get_setting_default_cases = {
     'interval': {'setting': 'interval', 'expected': 3600},
     'batch_size': {'setting': 'batch_size', 'expected': 10},
-    'remove_from_client': {'setting': 'remove_from_client', 'expected': True},
-    'blocklist': {'setting': 'blocklist', 'expected': True},
-    'search_again': {'setting': 'search_again', 'expected': True},
     'dry_run': {'setting': 'dry_run', 'expected': False},
     'stagger_interval_seconds': {'setting': 'stagger_interval_seconds', 'expected': 5},
 }
@@ -83,9 +80,6 @@ _parse_config_cases = {
             'global_settings': {
                 'interval': 3600,
                 'batch_size': 10,
-                'remove_from_client': True,
-                'blocklist': True,
-                'search_again': True,
                 'dry_run': False,
             },
         },
@@ -93,7 +87,7 @@ _parse_config_cases = {
     'killarr_section_overrides_defaults': {
         'config_data': make_config(killarr_section={'interval': 1800, 'batch_size': 5, 'dry_run': True}),
         'expected_result': {
-            'global_settings': {'interval': 1800, 'batch_size': 5, 'dry_run': True, 'remove_from_client': True},
+            'global_settings': {'interval': 1800, 'batch_size': 5, 'dry_run': True},
         },
     },
     'missing_instances_raises': {
@@ -392,7 +386,7 @@ _load_config_from_env_cases = {
             'KILLARR_INSTANCE_0_API_KEY': 'k',
         },
         'expected_result': {
-            'global_settings': {'interval': 3600, 'remove_from_client': True},
+            'global_settings': {'interval': 3600, 'dry_run': False},
         },
     },
     'multiple_instances': {
@@ -596,3 +590,27 @@ def test_load_config_from_env_shared(monkeypatch: Any, env_vars: Any, expected_r
     for key, value in env_vars.items():
         monkeypatch.setenv(key, value)
     assert_config_result(load_config_from_env(), expected_result)
+
+
+# --- Stall action settings ---
+
+
+def test_parse_config_with_actions() -> None:
+    """Test parse_config accepts and preserves valid stall category action settings."""
+    config = {
+        'instances': {'r': {'type': 'radarr', 'url': 'http://h', 'api_key': 'k', 'enabled': True}},
+        'killarr': {'no_upgrade': 'ignore', 'stalled': 'blocklist'},
+    }
+    result = parse_config(config)
+    assert result['global_settings']['no_upgrade'] == 'ignore'
+    assert result['global_settings']['stalled'] == 'blocklist'
+
+
+def test_parse_config_invalid_action() -> None:
+    """Test parse_config raises ValueError when a stall category has an unrecognised action value."""
+    config = {
+        'instances': {'r': {'type': 'radarr', 'url': 'http://h', 'api_key': 'k', 'enabled': True}},
+        'killarr': {'stalled': 'invalid_action'},
+    }
+    with pytest.raises(ValueError, match='must be one of'):
+        parse_config(config)

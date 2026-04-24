@@ -19,11 +19,24 @@ killarr:
   # batch_size: -1            # Remove all stalled items each cycle (unlimited)
   # batch_size: 0             # Disable removal entirely
 
-  remove_from_client: true    # Delete the file from the download client
-  blocklist: true             # Blocklist the release (prevents re-grabbing)
-  search_again: true          # Trigger a fresh search after removal
+  # --- Stall actions ---
+  # Each stall reason can be assigned one of four actions:
+  #   ignore    - Skip the item. No action taken. (default for all categories)
+  #   remove    - Delete from queue + download client. No new search.
+  #   retry     - Delete from queue/client + trigger a new search.
+  #   blocklist - Delete, add to blocklist, and trigger a new search.
+  #
+  # The 'stalled' key is the fallback for any reason not explicitly configured.
+  # Resolution order: instance override -> global -> stalled -> ignore
+  #
+  # stalled: blocklist        # Generic stalls (e.g. 0 peers, no seeds)
+  # no_upgrade: ignore        # "Not a Custom Format upgrade" — safe to leave
+  # manual_import: ignore     # Requires manual intervention
+  # no_files: remove          # Nothing eligible for import
+  # missing_items: remove     # Episodes/tracks missing from release
+  # tba_title: ignore         # Episode title not yet announced
 
-  # include_tags: ["active"]  # Only act on items with ANY of these tags
+  # include_tags: ["active"]   # Only act on items with ANY of these tags
   # exclude_tags: ["protected"] # Skip items with ANY of these tags
 
   dry_run: false              # Set to true to log without making changes
@@ -37,7 +50,7 @@ instances:
     enabled: true
     # killarr:                       # Per-instance Killarr overrides (optional)
     #   batch_size: 5
-    #   blocklist: false
+    #   no_upgrade: remove           # Override the no_upgrade action for this instance
 
   sonarr:
     type: sonarr

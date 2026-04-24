@@ -17,6 +17,7 @@ from killarr.clients.arr import LidarrClient
 from killarr.clients.arr import RadarrClient
 from killarr.clients.arr import SonarrClient
 from killarr.config_parser import SETTINGS_SCHEMA
+from killarr.config_parser import STALL_CATEGORIES
 from killarr.config_parser import get_setting_default
 from killarr.config_parser import load_config
 from killarr.config_parser import load_config_from_env
@@ -26,15 +27,15 @@ if 'TZ' not in os.environ:
     if hasattr(time, 'tzset'):
         time.tzset()
 
-log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+_LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
 logging.basicConfig(
-    level=getattr(logging, log_level, logging.INFO),
+    level=getattr(logging, _LOG_LEVEL, logging.INFO),
     format='%(asctime)s [%(levelname)s] %(message)s',
     datefmt='%Y-%m-%dT%H:%M:%S%z',
     stream=sys.stdout,
 )
 logging.Formatter.converter = time.localtime
-logger = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 _CLIENT_MAP: dict[str, type[ArrClient]] = {
     'lidarr': LidarrClient,
@@ -57,7 +58,7 @@ def _load_config_from_paths(config_paths: list[str]) -> dict | None:
         if Path(config_path).is_file():
             try:
                 config = load_config(config_path)
-                logger.info(f'Loaded configuration from: {config_path}')
+                _LOGGER.info(f'Loaded configuration from: {config_path}')
                 error_message = None
                 break
             except ValueError as error:
@@ -67,9 +68,9 @@ def _load_config_from_paths(config_paths: list[str]) -> dict | None:
                 continue
 
     if error_message:
-        logger.error(error_message)
+        _LOGGER.error(error_message)
     elif config is None:
-        logger.error(
+        _LOGGER.error(
             'No config.yaml found. Copy config.example.yaml to config.yaml and fill in your instance details.'
         )
 
@@ -83,32 +84,27 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
     stagger = _get_setting(settings, 'stagger_interval_seconds')
     dry_run = _get_setting(settings, 'dry_run')
     dry_run_str = ' (DRY RUN ENABLED)' if dry_run else ''
-    remove_str = 'yes' if _get_setting(settings, 'remove_from_client') else 'no'
-    blocklist_str = 'yes' if _get_setting(settings, 'blocklist') else 'no'
-    search_str = 'yes' if _get_setting(settings, 'search_again') else 'no'
 
-    logger.info(
+    _LOGGER.info(
         f'Killarr started{dry_run_str} | '
         f'Instances: {len(active_clients)} active | '
         f'Run Interval: {_get_setting(settings, "interval")}s | '
         f'Batch: {batch_str} | '
         f'Stagger: {stagger}s | '
-        f'Delete from client: {remove_str} | '
-        f'Blocklist: {blocklist_str} | '
-        f'Search again: {search_str}'
+        f'Stall handling: action-based'
     )
 
 
 def _run_removal_cycle(active_clients: list[Any], _settings: dict) -> None:
     """Run a single removal cycle across all active clients."""
-    logger.info('--- Starting removal cycle ---')
+    _LOGGER.info('--- Starting removal cycle ---')
 
     for client in active_clients:
         items = client.get_stalled_items()
         if not items:
-            logger.info(f'[{client.name}] No stalled items found this cycle.')
+            _LOGGER.info(f'[{client.name}] No stalled items found this cycle.')
             continue
-        logger.info(f'[{client.name}] Found {len(items)} stalled item(s). Removing...')
+        _LOGGER.info(f'[{client.name}] Found {len(items)} stalled item(s). Removing...')
         client.remove_stalled(items)
 
 
@@ -128,10 +124,11 @@ def build_arr_clients(
         Flat list of instantiated *arr client objects.
     """
     registry = client_registry if client_registry is not None else _CLIENT_MAP
+    instance_keys = set(SETTINGS_SCHEMA) | set(STALL_CATEGORIES)
     clients: list[ArrClient] = []
     for arr_type, client_class in registry.items():
         for instance in instances_config.get(arr_type, []):
-            instance_overrides = {key: instance[key] for key in SETTINGS_SCHEMA if key in instance}
+            instance_overrides = {key: instance[key] for key in instance_keys if key in instance}
             client_settings = {**settings, **instance_overrides}
             client = client_class(
                 name=instance['name'],
@@ -141,7 +138,7 @@ def build_arr_clients(
                 weight=instance.get('weight', 1.0),
             )
             clients.append(client)
-            logger.info(f'Registered {arr_type.capitalize()} instance: {instance["name"]}')
+            _LOGGER.info(f'Registered {arr_type.capitalize()} instance: {instance["name"]}')
     return clients
 
 
@@ -149,15 +146,15 @@ def run() -> None:
     """Load configuration and start the removal loop."""
     config_source = os.environ.get('KILLARR_CONFIG_SOURCE', 'file').lower()
     if config_source == 'env':
-        logger.info('Loading configuration from environment variables.')
+        _LOGGER.info('Loading configuration from environment variables.')
         try:
             config = load_config_from_env()
         except ValueError as error:
-            logger.error(f'Configuration error from environment: {error}')
+            _LOGGER.error(f'Configuration error from environment: {error}')
             config = None
     else:
         if config_source != 'file':
-            logger.warning(
+            _LOGGER.warning(
                 f"Unrecognized KILLARR_CONFIG_SOURCE value '{config_source}'. "
                 "Expected 'file' or 'env'. Falling back to file mode."
             )
@@ -170,7 +167,7 @@ def run() -> None:
     active_clients = build_arr_clients(config.get('instances', {}), settings)
 
     if not active_clients:
-        logger.warning("No *arr instances are configured. Add at least one entry under 'instances' to begin.")
+        _LOGGER.warning("No *arr instances are configured. Add at least one entry under 'instances' to begin.")
         sys.exit(1)
 
     _log_killarr_start(active_clients, settings)
@@ -179,7 +176,7 @@ def run() -> None:
 
     while True:
         _run_removal_cycle(active_clients, settings)
-        logger.info(f'--- Cycle complete. Sleeping for {run_interval_seconds}s. ---')
+        _LOGGER.info(f'--- Cycle complete. Sleeping for {run_interval_seconds}s. ---')
         time.sleep(run_interval_seconds)
 
 

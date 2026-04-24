@@ -24,9 +24,9 @@ Architecture, security model, and design philosophy for Killarr. Intended for se
 
 ## Why This Project Exists
 
-Stalled downloads are a recurring pain point in \*arr setups. Items can get stuck in the queue indefinitely — the download client reports a warning status, but nothing clears them automatically. The common workarounds (manual removal, Radarr/Sonarr's built-in "remove" + "search again") require periodic attention.
+Stalled downloads are a recurring pain point in \*arr setups. Items can get stuck in the queue indefinitely — the download client reports a warning status, but nothing clears them automatically. The common workarounds (manual intervention, Radarr/Sonarr's built-in "remove" + "search again") require periodic attention.
 
-Killarr automates this. It runs on a schedule, finds stalled items, removes them with configurable flags, and optionally triggers a fresh search. It is a companion to [Rangarr](https://github.com/JudoChinX/rangarr) and shares the same trust-first philosophy: small codebase, no external connections, everything auditable.
+Killarr automates this. It runs on a schedule, finds stalled items, classifies the stall reason, and performs automated cleanup based on configurable actions. It is a companion to [Rangarr](https://github.com/JudoChinX/rangarr) and shares the same trust-first philosophy: small codebase, no external connections, everything auditable.
 
 ---
 
@@ -47,11 +47,12 @@ To be absolutely clear, Killarr does not and will never:
 
 ## Architecture Overview
 
-Killarr is a ~789-line Python service with three core modules:
+Killarr is a ~883-line Python service with four core modules:
 
 ```
 killarr/
 ├── main.py           # Entry point and run loop
+├── classifier.py     # Stall reason classification logic
 ├── config_parser.py  # Configuration loading and validation
 └── clients/
     └── arr.py        # *arr API client implementations
@@ -59,16 +60,18 @@ killarr/
 
 **Data Flow:**
 ```
-config.yaml → config_parser.py → main.py → ArrClient instances → *arr APIs
+config.yaml → config_parser.py → main.py → ArrClient instances → classifier.py → *arr APIs
 ```
 
 Each cycle:
 1. Fetch the full queue from each \*arr instance (paginated)
 2. Filter client-side for `trackedDownloadStatus == "warning"`
-3. Apply tag filtering (include/exclude) and batch size limits
-4. DELETE each stalled item (with optional `removeFromClient` and `blocklist` params)
-5. POST a search command for each removed item (if `search_again: true`)
-6. Sleep for `interval` seconds and repeat
+3. Pass status messages to `classifier.py` to categorise the stall reason
+4. Resolve the named action (`ignore`, `remove`, `retry`, `blocklist`) based on configuration
+5. Apply tag filtering (include/exclude) and batch size limits
+6. DELETE each stalled item (with optional `removeFromClient` and `blocklist` params)
+7. POST a search command for each removed item (if action is `retry` or `blocklist`)
+8. Sleep for `interval` seconds and repeat
 
 ---
 
@@ -86,6 +89,15 @@ Each cycle:
 - `_get_setting()`: Helper to read a setting with fallback to the schema default.
 
 **No direct network activity:** Only calls client methods; does not make HTTP requests directly.
+
+### classifier.py — Stall Reason Classification
+
+**Purpose:** Maps \*arr status messages to stall categories.
+
+**Key Functions:**
+- `classify()`: Takes a list of messages and returns a category string (e.g., `no_upgrade`, `manual_import`, `missing_items`).
+
+**No network activity:** Pure string matching logic.
 
 ### config_parser.py — Configuration Loading and Validation
 
@@ -112,7 +124,7 @@ Each cycle:
 - `LidarrClient`: Lidarr-specific implementation (v1 endpoints, `albumId`, `AlbumSearch` command).
 
 **Key Methods:**
-- `get_stalled_items()`: Fetches the full queue, filters for stalled items, applies tag filtering and batch limits. Returns a list of `(queue_id, media_id, title)` tuples.
+- `get_stalled_items()`: Fetches the full queue, filters for stalled items, classifies them via `classifier.py`, and applies tag filtering and batch limits. Returns a list of `(queue_id, media_id, title, action)` tuples.
 - `_fetch_all_queue()`: Paginates through the \*arr queue endpoint until all records are retrieved.
 - `_is_stalled()`: Returns `True` if `trackedDownloadStatus == "warning"`.
 - `remove_stalled()`: Iterates over stalled items, calling `_remove_single()` with optional stagger sleep between items.
@@ -130,7 +142,7 @@ Each cycle:
 |---|---|---|---|---|
 | `/api/v3/queue` (Radarr/Sonarr), `/api/v1/queue` (Lidarr) | GET | Fetch all queue records | Per cycle per instance | Read-only |
 | `/api/v3/queue/{id}` (Radarr/Sonarr), `/api/v1/queue/{id}` (Lidarr) | DELETE | Remove stalled queue item | Per stalled item | **Write** |
-| `/api/v3/command` (Radarr/Sonarr), `/api/v1/command` (Lidarr) | POST | Trigger fresh search | Per removal (if `search_again: true`) | **Write** |
+| `/api/v3/command` (Radarr/Sonarr), `/api/v1/command` (Lidarr) | POST | Trigger fresh search | Per removal (if action is `retry` or `blocklist`) | **Write** |
 | `/api/v3/tag` (Radarr/Sonarr), `/api/v1/tag` (Lidarr) | GET | Resolve tag names to IDs | Startup only (if tags configured) | Read-only |
 
 **Search Commands Sent:**
@@ -139,7 +151,7 @@ Each cycle:
 - Lidarr: `{"name": "AlbumSearch", "albumIds": [<id>]}`
 
 **Data Accessed:**
-- Queue metadata only: titles, IDs, download status
+- Queue metadata only: titles, IDs, download status, status messages
 - No media files, no user data, no download client information
 
 ---
@@ -178,9 +190,9 @@ This is the ONLY place API keys are used. They are:
 DELETE and POST requests are the only write operations. Both are guarded by the `dry_run` check:
 
 ```python
-def _remove_single(self, queue_id, media_id, title, index, total):
+def _remove_single(self, queue_id, media_id, title, action, index, total):
     if self.dry_run:
-        logger.info(f'[{self.name}] [DRY RUN] Would remove (stalled): {title}')
+        _LOGGER.info(f'[{self.name}] [DRY RUN] Would {action}: {title}')
         return
     # ... DELETE request
 ```
@@ -200,7 +212,7 @@ Killarr operates entirely within your local network:
 
 ### 1. Security Through Simplicity
 
-**Decision:** ~789 lines of core Python code, zero external dependencies beyond `requests` and `PyYAML`.
+**Decision:** ~883 lines of core Python code, zero external dependencies beyond `requests` and `PyYAML`.
 
 **Why:** Small codebases are auditable. Every line of code is a potential attack surface. By keeping the codebase minimal, security reviewers can read and understand the entire project in under an hour.
 
@@ -216,11 +228,11 @@ Killarr operates entirely within your local network:
 
 **Decision:** Only two write operations exist — DELETE queue items and POST search commands.
 
-**Why:** Write operations are where damage can happen. Killarr cannot modify your library, change settings, or access download clients. Both write operations match actions you would take manually in the \*arr UI, and both can be disabled (`blocklist: false`, `search_again: false`, or `dry_run: true`).
+**Why:** Write operations are where damage can happen. Killarr cannot modify your library, change settings, or access download clients. Both write operations match actions you would take manually in the \*arr UI, and both can be disabled by setting actions to `ignore` or using `dry_run: true`.
 
 ### 4. Test Coverage as Documentation
 
-**Decision:** 129 tests covering all code paths including error conditions.
+**Decision:** 159 tests covering all code paths including error conditions.
 
 **Why:** Tests serve three purposes:
 1. Prevent regressions.
@@ -277,10 +289,11 @@ Every line of AI-generated code was reviewed, tested, and validated against requ
 
 ## Testing Strategy
 
-**Test Coverage:** 129 tests, 98.85% coverage.
+**Test Coverage:** 159 tests, 99.37% coverage.
 
 - `tests/test_config_parser.py`: Configuration validation, schema defaults, shared config, env var mode — no network calls.
 - `tests/test_arr_client.py`: Queue fetch, stall filtering, removal, search-again, tag resolution, dry run, stagger — all with mocked HTTP responses.
+- `tests/test_classifier.py`: Stall reason classification tests — no network calls.
 - `tests/test_main.py`: Run loop, cycle orchestration, client building, config loading — mocked clients and config paths.
 - `tests/builders.py`: Builder pattern for constructing queue record fixtures and client instances in tests.
 - `tests/helpers.py`: Mock HTTP response factories for queue and tag endpoints.
@@ -311,12 +324,13 @@ Development (see `requirements-dev.txt`):
 
 ## File Sizes
 
-- `killarr/main.py`: 187 lines
-- `killarr/config_parser.py`: 319 lines
-- `killarr/clients/arr.py`: 283 lines
-- `killarr/__init__.py`: 0 lines (package marker)
-- `killarr/clients/__init__.py`: 0 lines (package marker)
-- **Total:** ~789 lines of Python
+- `killarr/main.py`: 184 lines
+- `killarr/classifier.py`: 41 lines
+- `killarr/config_parser.py`: 333 lines
+- `killarr/clients/arr.py`: 323 lines
+- `killarr/__init__.py`: 1 line (package marker)
+- `killarr/clients/__init__.py`: 1 line (package marker)
+- **Total:** ~883 lines of Python
 
 The small codebase size makes comprehensive security auditing feasible.
 
@@ -327,7 +341,7 @@ The small codebase size makes comprehensive security auditing feasible.
 Don't trust documentation — verify the claims:
 
 1. **Run the tests:** `pytest` — see that security-relevant code is tested.
-2. **Read the code:** Start with `killarr/main.py` — 187 lines.
+2. **Read the code:** Start with `killarr/main.py` — 184 lines.
 3. **Check the API calls:** Enable `LOG_LEVEL=DEBUG` — every HTTP request is logged.
 4. **Review dependencies:** `cat requirements.txt` — two libraries, both standard.
 

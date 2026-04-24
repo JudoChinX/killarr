@@ -7,10 +7,21 @@ from typing import Any
 
 import yaml
 
-logger = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 REQUIRED_TOP_LEVEL = ('instances',)
+VALID_ACTIONS = ('ignore', 'remove', 'retry', 'blocklist')
 VALID_ARR_TYPES = ('radarr', 'sonarr', 'lidarr')
+STALL_CATEGORIES = (
+    'stalled',
+    'no_upgrade',
+    'manual_import',
+    'no_files',
+    'missing_items',
+    'tba_title',
+    'no_messages',
+    'unknown',
+)
 
 SETTINGS_SCHEMA = {
     'interval': {
@@ -27,18 +38,6 @@ SETTINGS_SCHEMA = {
         'default': 10,
         'type': int,
         'allow_special_values': True,
-    },
-    'remove_from_client': {
-        'default': True,
-        'type': bool,
-    },
-    'blocklist': {
-        'default': True,
-        'type': bool,
-    },
-    'search_again': {
-        'default': True,
-        'type': bool,
     },
     'dry_run': {
         'default': False,
@@ -137,6 +136,13 @@ def _validate_global_settings(settings: dict, schema: dict) -> None:
             min_value=definition.get('min_value'),
             element_type=definition.get('element_type'),
         )
+
+
+def _validate_stall_action_settings(settings: dict) -> None:
+    """Validate any stall category action values present in settings."""
+    for category in STALL_CATEGORIES:
+        if category in settings:
+            _validate_setting(category, settings[category], str, choices=VALID_ACTIONS)
 
 
 def _validate_setting(
@@ -266,7 +272,7 @@ def load_config_from_env() -> dict:
             data.setdefault('enabled', True)
             config['instances'][name] = data
         else:
-            logger.warning(f'Skipping unconfigured instance slot at index {index} (name is empty).')
+            _LOGGER.warning(f'Skipping unconfigured instance slot at index {index} (name is empty).')
 
     return parse_config(config)
 
@@ -301,6 +307,7 @@ def parse_config(config: Any) -> dict:
 
     settings = dict(killarr_section)
     _validate_global_settings(settings, SETTINGS_SCHEMA)
+    _validate_stall_action_settings(settings)
     config['global_settings'] = settings
 
     raw_instances = config.get('instances', {})

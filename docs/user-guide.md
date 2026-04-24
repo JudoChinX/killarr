@@ -11,6 +11,7 @@ Complete guide to installing, configuring, and operating Killarr.
 - [Configuration Sources](#configuration-sources)
 - [Configuration Reference](#configuration-reference)
   - [Global Settings](#global-settings)
+  - [Stall Actions](#stall-actions)
   - [Instance Settings](#instance-settings)
   - [Per-Instance Killarr Overrides](#per-instance-killarr-overrides)
   - [Environment Variable Expansion](#environment-variable-expansion)
@@ -171,39 +172,6 @@ killarr:
   # batch_size: 0   # Disabled — no removals
 ```
 
-#### `remove_from_client`
-
-**Type:** Boolean | **Default:** `true`
-
-When `true`, passes `removeFromClient=true` to the \*arr DELETE queue API. This tells the \*arr app to also delete the file from the download client (e.g., remove the torrent from qBittorrent or SABnzbd). When `false`, the item is removed from the \*arr queue but the download client entry is left in place.
-
-```yaml
-killarr:
-  remove_from_client: true
-```
-
-#### `blocklist`
-
-**Type:** Boolean | **Default:** `true`
-
-When `true`, passes `blocklist=true` to the \*arr DELETE queue API. This adds the removed release to the \*arr blocklist, preventing it from being grabbed again by automatic searches.
-
-```yaml
-killarr:
-  blocklist: true
-```
-
-#### `search_again`
-
-**Type:** Boolean | **Default:** `true`
-
-When `true`, Killarr triggers a fresh search for the media item after removing the stalled download. This sends a `MoviesSearch` (Radarr), `EpisodeSearch` (Sonarr), or `AlbumSearch` (Lidarr) command to the \*arr instance — the same as clicking "Search" manually. Set to `false` if you prefer to let \*arr's own monitored search handle re-acquisition.
-
-```yaml
-killarr:
-  search_again: true
-```
-
 #### `stagger_interval_seconds`
 
 **Type:** Integer | **Default:** `5` | **Minimum:** `0`
@@ -237,6 +205,42 @@ Skip stalled items where the media has **any** of the listed tags. Tags are matc
 ```yaml
 killarr:
   exclude_tags: ["protected"]  # Never remove stalled items tagged "protected"
+```
+
+### Stall Actions
+
+Killarr classifies each stalled item into a category based on its `statusMessages` and performs a named action. Actions can be configured globally under `killarr:` or per instance.
+
+#### Valid Actions
+
+| Action | Description |
+|---|---|
+| `ignore` | Skip the item. No action taken. (Default for all categories) |
+| `remove` | Delete from queue and download client. No new search. |
+| `retry` | Delete from queue and download client, then trigger a fresh search. |
+| `blocklist` | Delete from queue/client, add release to blocklist, and trigger fresh search. |
+
+#### Stall Categories
+
+| Category | Description |
+|---|---|
+| `stalled` | Generic fallback for reasons not matching other categories (e.g., 0 peers). |
+| `no_upgrade` | "Not a Custom Format upgrade for existing [media]". |
+| `manual_import` | "Manual import required" or matched to media by ID. |
+| `no_files` | "No files found are eligible for import". |
+| `missing_items` | "Episodes/tracks missing from the release". |
+| `tba_title` | "TBA title" (common in Sonarr for unannounced episodes). |
+| `no_messages` | Stall detected but no status messages were provided by the \*arr app. |
+| `unknown` | Status messages are present but did not match any known patterns. |
+
+#### Configuration Example
+
+```yaml
+killarr:
+  stalled: blocklist     # Most stalled items should be blocklisted and retried
+  no_upgrade: remove     # Just remove items that don't improve on existing
+  manual_import: ignore  # Leave items requiring manual intervention alone
+  no_messages: retry     # Retry if no specific reason is given
 ```
 
 ### Instance Settings
@@ -286,12 +290,12 @@ Relative priority used only when `batch_size` is a positive integer and multiple
 
 ### Per-Instance Killarr Overrides
 
-Any global `killarr:` setting can be overridden for a specific instance by adding a `killarr:` subsection under that instance. This is useful when different instances need different behaviour — for example, a more aggressive batch size for one Radarr instance.
+Any global `killarr:` setting (including actions) can be overridden for a specific instance by adding a `killarr:` subsection under that instance.
 
 ```yaml
 killarr:
   batch_size: 10
-  blocklist: true
+  stalled: blocklist
 
 instances:
   Radarr-Main:
@@ -299,7 +303,7 @@ instances:
     host: "http://radarr:7878"
     api_key: "key1"
     enabled: true
-    # Uses global defaults: batch_size=10, blocklist=true
+    # Uses global defaults: batch_size=10, stalled=blocklist
 
   Radarr-4K:
     type: radarr
@@ -307,11 +311,9 @@ instances:
     api_key: "key2"
     enabled: true
     killarr:
-      batch_size: 3      # Override: only remove 3 per cycle for 4K
-      blocklist: false   # Override: don't blocklist 4K releases
+      batch_size: 3       # Override: only remove 3 per cycle for 4K
+      stalled: remove     # Override: don't blocklist 4K releases, just remove
 ```
-
-Instance-level overrides take precedence over global settings. Any setting not specified in the instance override inherits the global value.
 
 ### Environment Variable-Only Configuration
 
@@ -319,19 +321,24 @@ Set `KILLARR_CONFIG_SOURCE=env` to have Killarr ignore `config.yaml` entirely an
 
 #### Global Settings
 
-Prefix global settings with `KILLARR_GLOBAL_`. All values are type-coerced automatically — `"true"`/`"false"` become booleans, numeric strings become integers.
+Prefix global settings with `KILLARR_GLOBAL_`.
 
 | Variable | Default | Description |
 |---|---|---|
 | `KILLARR_GLOBAL_INTERVAL` | `3600` | Run interval in seconds. |
 | `KILLARR_GLOBAL_DRY_RUN` | `false` | Log removals without executing them. |
 | `KILLARR_GLOBAL_BATCH_SIZE` | `10` | Items to remove per cycle. `0` disables, `-1` is unlimited. |
-| `KILLARR_GLOBAL_REMOVE_FROM_CLIENT` | `true` | Delete file from download client on removal. |
-| `KILLARR_GLOBAL_BLOCKLIST` | `true` | Add removed release to the blocklist. |
-| `KILLARR_GLOBAL_SEARCH_AGAIN` | `true` | Trigger fresh search after removal. |
 | `KILLARR_GLOBAL_STAGGER_INTERVAL_SECONDS` | `5` | Delay in seconds between individual removals. |
-| `KILLARR_GLOBAL_INCLUDE_TAGS` | `(none)` | Comma-separated tag names. Only remove items with any of these tags. |
-| `KILLARR_GLOBAL_EXCLUDE_TAGS` | `(none)` | Comma-separated tag names. Skip items with any of these tags. |
+| `KILLARR_GLOBAL_INCLUDE_TAGS` | `(none)` | Comma-separated tag names. |
+| `KILLARR_GLOBAL_EXCLUDE_TAGS` | `(none)` | Comma-separated tag names. |
+| `KILLARR_GLOBAL_STALLED` | `ignore` | Action for `stalled` category. |
+| `KILLARR_GLOBAL_NO_UPGRADE` | `ignore` | Action for `no_upgrade` category. |
+| `KILLARR_GLOBAL_MANUAL_IMPORT` | `ignore` | Action for `manual_import` category. |
+| `KILLARR_GLOBAL_NO_FILES` | `ignore` | Action for `no_files` category. |
+| `KILLARR_GLOBAL_MISSING_ITEMS` | `ignore` | Action for `missing_items` category. |
+| `KILLARR_GLOBAL_TBA_TITLE` | `ignore` | Action for `tba_title` category. |
+| `KILLARR_GLOBAL_NO_MESSAGES` | `ignore` | Action for `no_messages` category. |
+| `KILLARR_GLOBAL_UNKNOWN` | `ignore` | Action for `unknown` category. |
 
 #### Instance Settings
 
@@ -354,40 +361,7 @@ If you already have Rangarr configured via `RANGARR_INSTANCE_*` environment vari
 KILLARR_INSTANCE_SOURCE=shared
 ```
 
-When set, Killarr reads `RANGARR_INSTANCE_<n>_*` for all instance definitions. `KILLARR_GLOBAL_*` settings still apply as normal. This is the env-var equivalent of pointing both tools at the same `config.yaml`.
-
-#### Example
-
-```bash
-KILLARR_CONFIG_SOURCE=env
-KILLARR_GLOBAL_INTERVAL=3600
-KILLARR_GLOBAL_DRY_RUN=false
-
-KILLARR_INSTANCE_0_NAME=Movies
-KILLARR_INSTANCE_0_TYPE=radarr
-KILLARR_INSTANCE_0_URL=http://radarr:7878
-KILLARR_INSTANCE_0_API_KEY=your-api-key
-
-KILLARR_INSTANCE_1_NAME=TV
-KILLARR_INSTANCE_1_TYPE=sonarr
-KILLARR_INSTANCE_1_URL=http://sonarr:8989
-KILLARR_INSTANCE_1_API_KEY=your-api-key
-```
-
-Or, if Rangarr is already configured:
-
-```bash
-# Killarr-specific settings
-KILLARR_CONFIG_SOURCE=env
-KILLARR_GLOBAL_DRY_RUN=false
-KILLARR_INSTANCE_SOURCE=shared  # Read instances from RANGARR_INSTANCE_* vars
-
-# Shared instance definitions (read by both Rangarr and Killarr)
-RANGARR_INSTANCE_0_NAME=Movies
-RANGARR_INSTANCE_0_TYPE=radarr
-RANGARR_INSTANCE_0_URL=http://radarr:7878
-RANGARR_INSTANCE_0_API_KEY=your-api-key
-```
+When set, Killarr reads `RANGARR_INSTANCE_<n>_*` for all instance definitions. `KILLARR_GLOBAL_*` settings still apply as normal.
 
 ---
 
@@ -399,57 +373,7 @@ Killarr and [Rangarr](https://github.com/JudoChinX/rangarr) can share a single `
 - **Killarr** reads `killarr:` for its settings
 - **Both** read `instances:` for connection details
 
-This means you can run both tools against the same config file with no duplication:
-
-```yaml
-# Shared config.yaml — works with both Rangarr and Killarr
-
-# Rangarr settings — ignored by Killarr
-global:
-  interval: 3600
-  missing_batch_size: 20
-  upgrade_batch_size: 10
-  stagger_interval_seconds: 30
-
-# Killarr settings — ignored by Rangarr
-killarr:
-  interval: 3600
-  batch_size: 5
-  remove_from_client: true
-  blocklist: true
-  search_again: true
-  stagger_interval_seconds: 10
-  dry_run: false
-
-# Shared by both tools
-instances:
-  Radarr:
-    type: radarr
-    host: "http://radarr:7878"
-    api_key: "YOUR_RADARR_API_KEY"
-    enabled: true
-
-  Sonarr:
-    type: sonarr
-    host: "http://sonarr:8989"
-    api_key: "YOUR_SONARR_API_KEY"
-    enabled: true
-```
-
-**Rangarr co-deployment is not required.** If you are only running Killarr, your config only needs `killarr:` + `instances:`:
-
-```yaml
-killarr:
-  interval: 3600
-  dry_run: false
-
-instances:
-  Radarr:
-    type: radarr
-    host: "http://radarr:7878"
-    api_key: "YOUR_API_KEY"
-    enabled: true
-```
+This means you can run both tools against the same config file with no duplication.
 
 ---
 
@@ -467,7 +391,7 @@ services:
     hostname: killarr
     restart: unless-stopped
     environment:
-      TZ: UTC          # Set your timezone for log timestamps (e.g. America/New_York)
+      TZ: UTC          # Set your timezone for log timestamps
       LOG_LEVEL: INFO  # Use DEBUG for verbose logging
     volumes:
       - ./config.yaml:/app/config/config.yaml:ro
@@ -479,25 +403,9 @@ networks:
     external: true
 ```
 
-**View logs:**
-```bash
-docker compose logs -f
-```
-
-**Update to a new release:**
-```bash
-docker compose pull
-docker compose up -d
-```
-
 ### Docker Run
 
 ```bash
-curl -O https://raw.githubusercontent.com/JudoChinX/killarr/main/config.example.yaml
-mv config.example.yaml config.yaml
-chmod 644 config.yaml  # Required: container runs as UID 65532 (nonroot)
-# Edit config.yaml with your *arr API keys and hostnames
-
 docker run -d \
   --name killarr \
   --hostname killarr \
@@ -509,38 +417,9 @@ docker run -d \
   judochinx/killarr:latest
 ```
 
-**View logs:**
-```bash
-docker logs -f killarr
-```
-
-**Update to a new release:**
-```bash
-docker pull judochinx/killarr:latest
-docker stop killarr && docker rm killarr
-# Re-run the docker run command above
-```
-
 ### Docker Networking
 
 Killarr and all \*arr containers should share a single, dedicated Docker network. This keeps traffic between containers internal and off the host network stack.
-
-Create the network once:
-```bash
-docker network create arr
-```
-
-In `config.yaml`, use container hostnames instead of `localhost`:
-```yaml
-instances:
-  Radarr:
-    type: radarr
-    host: "http://radarr:7878"  # Container hostname, not localhost
-    api_key: "your_api_key"
-    enabled: true
-```
-
-If Killarr and your \*arr containers are already on a shared network (e.g., one created for Rangarr), you can reuse the same network — Killarr does not need its own.
 
 ---
 
@@ -550,36 +429,15 @@ If Killarr and your \*arr containers are already on a shared network (e.g., one 
 
 Before enabling Killarr on a live system, set `dry_run: true` and run for at least one full cycle. Review the logs to confirm it identifies the right items and would take the right actions. Only set `dry_run: false` once you are satisfied.
 
-```yaml
-killarr:
-  dry_run: true
-  interval: 60  # Short interval for testing
-```
-
-```bash
-docker compose up -d && docker compose logs -f
-```
-
 ### Use Tag Filtering for Fine Control
 
-If you have media that should never be auto-removed (e.g., seeding torrents, manually managed items), add a tag in your \*arr app and configure `exclude_tags`:
-
-```yaml
-killarr:
-  exclude_tags: ["protected", "seeding"]
-```
-
-Tags are resolved at startup from each \*arr instance. Adding or removing tags in \*arr requires restarting Killarr to take effect.
-
-### Tune Stagger for Your Setup
-
-The default `stagger_interval_seconds: 5` is conservative. If your \*arr instances are local and responsive, you can reduce this. If you have many stalled items and want to pace removals, increase it.
+If you have media that should never be auto-removed (e.g., seeding torrents, manually managed items), add a tag in your \*arr app and configure `exclude_tags`.
 
 ---
 
 ## Troubleshooting
 
-### Connection Errors
+### connection Errors
 
 #### "Failed to fetch queue" in logs
 
@@ -588,57 +446,22 @@ The default `stagger_interval_seconds: 5` is conservative. If your \*arr instanc
 2. \*arr instance is unreachable from the Killarr container.
 3. Docker networking not configured correctly.
 
-**Solutions:**
-
-1. **Verify URL format:**
-   ```yaml
-   host: "http://radarr:7878"   # Docker: use container hostname
-   host: "http://localhost:7878" # Non-Docker only — won't work inside Docker
-   ```
-
-2. **Test connectivity manually:**
-   ```bash
-   curl http://localhost:7878/api/v3/system/status?apikey=YOUR_API_KEY
-   ```
-
-3. **Docker networking:** Killarr and \*arr containers must be on the same Docker network. Use container hostnames in `config.yaml`, not `localhost`.
-
 #### "401 Unauthorized" or "403 Forbidden"
 
 **Cause:** Invalid API key.
 
-**Solution:** Go to Settings → General → Security in the \*arr UI and copy the API key exactly (no extra spaces, case-sensitive).
-
 ### No Stalled Items Found
 
-**"No stalled items found this cycle"** is the expected log message when your queues are healthy — this is normal.
+**"No stalled items found this cycle"** is normal if your queues are healthy.
 
 If you believe items are stalled but Killarr is not finding them:
 
-1. **Enable debug logging** to see every queue record evaluated:
-   ```yaml
-   environment:
-     LOG_LEVEL: DEBUG
-   ```
-   Look for `Skipping stalled item (tag filter):` messages — these indicate items are being excluded by tag filtering.
-
-2. **Verify in \*arr UI:** Go to Activity → Queue and check the "Status" column. Killarr detects items with `trackedDownloadStatus = warning` — the \*arr queue should show these as "Warning".
-
-3. **Check tag filtering:** If `include_tags` or `exclude_tags` is configured, verify the tag names match exactly what is set in the \*arr app (case-insensitive, but spelling must match).
-
-### Items Found but Not Removed
-
-**Cause:** `dry_run: true` is set.
-
-**Solution:**
-```yaml
-killarr:
-  dry_run: false
-```
+1. **Enable debug logging** to see every queue record evaluated (`LOG_LEVEL=DEBUG`).
+2. **Verify in \*arr UI:** Go to Activity → Queue. Killarr detects items with "Warning" status.
 
 ### "chmod 644" Reminder
 
-The container runs as UID 65532 (`nonroot`), not your host user. The config file must be readable by this user:
+The container runs as UID 65532 (`nonroot`). The config file must be world-readable:
 
 ```bash
 chmod 644 config.yaml
@@ -648,35 +471,20 @@ chmod 644 config.yaml
 
 ## Development Setup
 
+See the [Style Guide](style-guide.md) for detailed coding conventions.
+
 ```bash
 # Clone the repo
 git clone https://github.com/JudoChinX/killarr.git
 cd killarr
 
-# Create a virtual environment with Python 3.13+
+# Create a virtual environment
 uv venv --python 3.13 .venv
-source .venv/bin/activate  # Linux/macOS
-# .venv\Scripts\activate   # Windows
+source .venv/bin/activate
 
 # Install dev dependencies
 pip install -r requirements-dev.txt
 
 # Run the test suite
 pytest
-
-# Run with coverage report
-pytest --cov=killarr --cov-report=term-missing
-
-# Linting and formatting
-ruff check .
-ruff format .
-
-# Type checking
-mypy killarr/ tests/
-
-# Security scan
-bandit -r killarr/ -lll
-
-# Code quality
-pylint killarr/ tests/
 ```

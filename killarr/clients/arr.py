@@ -8,9 +8,11 @@ from typing import override
 
 import requests
 
-logger = logging.getLogger(__name__)
+from killarr.classifier import classify
 
-type QueueItem = tuple[int, int, str]  # (queue_id, media_id, title)
+_LOGGER = logging.getLogger(__name__)
+
+type QueueItem = tuple[int, int, str, str]  # (queue_id, media_id, title, action)
 
 
 class ArrClient(ABC):
@@ -43,12 +45,9 @@ class ArrClient(ABC):
         self.weight = weight
         self.batch_size: int = settings.get('batch_size', 10)
         self.stagger_seconds: int = settings.get('stagger_interval_seconds', 5)
-        self.remove_from_client: bool = settings.get('remove_from_client', True)
-        self.blocklist: bool = settings.get('blocklist', True)
-        self.search_again: bool = settings.get('search_again', True)
         self.dry_run: bool = settings.get('dry_run', False)
         if not self.url.lower().startswith('https://'):
-            logger.warning(
+            _LOGGER.warning(
                 f"Client '{name}' is using a non-HTTPS URL ({self.url}). API keys will be transmitted in plaintext."
             )
         self.session = requests.Session()
@@ -61,23 +60,6 @@ class ArrClient(ABC):
     @abstractmethod
     def _command_name(self) -> str:
         """Return the API command name for a fresh search (e.g. 'MoviesSearch')."""
-
-    @property
-    @abstractmethod
-    def _id_field(self) -> str:
-        """Return the payload ID field name for a search command (e.g. 'movieIds')."""
-
-    @abstractmethod
-    def _get_media_id(self, record: dict) -> int:
-        """Extract the media item ID from a queue record for a follow-up search."""
-
-    @abstractmethod
-    def _get_record_tags(self, record: dict) -> list[int]:
-        """Return the tag ID list from a queue record."""
-
-    @abstractmethod
-    def _get_record_title(self, record: dict) -> str:
-        """Extract a human-readable title from a queue record."""
 
     def _fetch_all_queue(self) -> list[dict]:
         """Fetch all queue records across all pages."""
@@ -97,10 +79,27 @@ class ArrClient(ABC):
                     break
                 current_page += 1
             except requests.RequestException as error:
-                logger.error(f'[{self.name}] Failed to fetch queue: {error}')
+                _LOGGER.error(f'[{self.name}] Failed to fetch queue: {error}')
                 break
 
         return result
+
+    @abstractmethod
+    def _get_media_id(self, record: dict) -> int:
+        """Extract the media item ID from a queue record for a follow-up search."""
+
+    @abstractmethod
+    def _get_record_tags(self, record: dict) -> list[int]:
+        """Return the tag ID list from a queue record."""
+
+    @abstractmethod
+    def _get_record_title(self, record: dict) -> str:
+        """Extract a human-readable title from a queue record."""
+
+    @property
+    @abstractmethod
+    def _id_field(self) -> str:
+        """Return the payload ID field name for a search command (e.g. 'movieIds')."""
 
     def _is_stalled(self, record: dict) -> bool:
         """Return True if the record is considered stalled by the arr app."""
@@ -114,29 +113,34 @@ class ArrClient(ABC):
             or (self._include_tag_ids and not record_tag_ids & self._include_tag_ids)
         )
 
-    def _remove_single(self, queue_id: int, media_id: int, title: str, index: int, total: int) -> None:
+    def _remove_single(self, queue_id: int, media_id: int, title: str, action: str, index: int, total: int) -> None:
         """DELETE a single queue item and optionally trigger a fresh search."""
         if self.dry_run:
-            logger.info(f'[{self.name}] [DRY RUN] Would remove (stalled): {title} ({index}/{total})')
+            _LOGGER.info(f'[{self.name}] [DRY RUN] Would {action}: {title} ({index}/{total})')
             return
 
-        params: dict[str, str] = {}
-        if self.remove_from_client:
-            params['removeFromClient'] = 'true'
-        if self.blocklist:
+        params: dict[str, str] = {'removeFromClient': 'true'}
+        if action == 'blocklist':
             params['blocklist'] = 'true'
 
         url = f'{self.url}{self.ENDPOINT_QUEUE}/{queue_id}'
         try:
             response = self.session.delete(url, params=params, timeout=15)
-            response.raise_for_status()
-            logger.info(f'[{self.name}] Removed (stalled): {title} ({index}/{total})')
+            if response.status_code == 404:
+                _LOGGER.info(f'[{self.name}] Removed ({action}, cascade): {title} ({index}/{total})')
+            else:
+                response.raise_for_status()
+                _LOGGER.info(f'[{self.name}] Removed ({action}): {title} ({index}/{total})')
         except requests.RequestException as error:
-            logger.error(f'[{self.name}] Failed to remove {title} (ID: {queue_id}): {error}')
+            _LOGGER.error(f'[{self.name}] Failed to remove {title} (ID: {queue_id}): {error}')
             return
 
-        if self.search_again:
+        if action in ('retry', 'blocklist'):
             self._trigger_search(media_id, title)
+
+    def _resolve_action(self, category: str) -> str:
+        """Resolve the action for a stall category using the config hierarchy."""
+        return self.settings.get(category) or 'ignore'
 
     def _resolve_tag_ids(self) -> None:
         """Fetch instance tags and resolve configured tag names to IDs."""
@@ -151,7 +155,7 @@ class ArrClient(ABC):
                 self._include_tag_ids = self._resolve_tag_names(tag_map, include_names)
                 self._exclude_tag_ids = self._resolve_tag_names(tag_map, exclude_names)
             except requests.RequestException as err:
-                logger.error(f'[{self.name}] Failed to fetch tags, tag filtering disabled: {err}')
+                _LOGGER.error(f'[{self.name}] Failed to fetch tags, tag filtering disabled: {err}')
 
     def _resolve_tag_names(self, tag_map: dict[str, int], names: list[str]) -> set[int]:
         """Resolve tag name strings to integer IDs, warning on unknown names."""
@@ -159,7 +163,7 @@ class ArrClient(ABC):
         for name in names:
             tag_id = tag_map.get(name.lower())
             if tag_id is None:
-                logger.warning(f'[{self.name}] Tag not found, ignoring: {name}')
+                _LOGGER.warning(f'[{self.name}] Tag not found, ignoring: {name}')
             else:
                 result.add(tag_id)
         return result
@@ -171,15 +175,15 @@ class ArrClient(ABC):
         try:
             response = self.session.post(url, json=payload, timeout=15)
             response.raise_for_status()
-            logger.debug(f'[{self.name}] Triggered search for: {title}')
+            _LOGGER.debug(f'[{self.name}] Triggered search for: {title}')
         except requests.RequestException as error:
-            logger.warning(f'[{self.name}] Failed to trigger search for {title} (ID: {media_id}): {error}')
+            _LOGGER.warning(f'[{self.name}] Failed to trigger search for {title} (ID: {media_id}): {error}')
 
     def get_stalled_items(self) -> list[QueueItem]:
-        """Fetch the queue and return stalled items up to batch_size.
+        """Fetch the queue, classify each stalled item, and return those with a non-ignore action.
 
         Returns:
-            List of (queue_id, media_id, title) tuples for stalled items.
+            List of (queue_id, media_id, title, action) tuples for actionable stalled items.
         """
         if self.batch_size == 0:
             return []
@@ -190,14 +194,34 @@ class ArrClient(ABC):
         for record in all_records:
             if not self._is_stalled(record):
                 continue
+
+            messages: list[str] = []
+            for msg_obj in record.get('statusMessages', []):
+                messages.extend(msg_obj.get('messages', []))
+
+            category = classify(messages)
+            if category == 'unknown':
+                title = self._get_record_title(record)
+                _LOGGER.warning(
+                    f'[{self.name}] Unrecognised status messages for "{title}" '
+                    f'— please open a bug report at https://github.com/JudoChinX/killarr/issues '
+                    f'with the following: {messages}'
+                )
+            action = self._resolve_action(category)
+
+            if action == 'ignore':
+                continue
+
             if self._is_tag_filtered_out(record):
                 title = self._get_record_title(record)
-                logger.debug(f'[{self.name}] Skipping stalled item (tag filter): {title}')
+                _LOGGER.debug(f'[{self.name}] Skipping stalled item (tag filter): {title}')
                 continue
+
             queue_id = record['id']
             media_id = self._get_media_id(record)
             title = self._get_record_title(record)
-            items.append((queue_id, media_id, title))
+            items.append((queue_id, media_id, title, action))
+
             if self.batch_size > 0 and len(items) >= self.batch_size:
                 break
 
@@ -207,13 +231,13 @@ class ArrClient(ABC):
         """Remove each stalled item from the queue, staggering between calls.
 
         Args:
-            items: List of (queue_id, media_id, title) tuples.
+            items: List of (queue_id, media_id, title, action) tuples.
         """
         total = len(items)
-        for index, (queue_id, media_id, title) in enumerate(items, start=1):
-            self._remove_single(queue_id, media_id, title, index, total)
+        for index, (queue_id, media_id, title, action) in enumerate(items, start=1):
+            self._remove_single(queue_id, media_id, title, action, index, total)
             if self.stagger_seconds > 0 and index < total:
-                logger.debug(f'[{self.name}] Staggering next removal by {self.stagger_seconds}s.')
+                _LOGGER.debug(f'[{self.name}] Staggering next removal by {self.stagger_seconds}s.')
                 time.sleep(self.stagger_seconds)
 
 
@@ -224,11 +248,6 @@ class RadarrClient(ArrClient):
     @override
     def _command_name(self) -> str:
         return 'MoviesSearch'
-
-    @property
-    @override
-    def _id_field(self) -> str:
-        return 'movieIds'
 
     @override
     def _get_media_id(self, record: dict) -> int:
@@ -242,6 +261,11 @@ class RadarrClient(ArrClient):
     def _get_record_title(self, record: dict) -> str:
         return record.get('title', f'Queue item {record.get("id", "Unknown")}')
 
+    @property
+    @override
+    def _id_field(self) -> str:
+        return 'movieIds'
+
 
 class SonarrClient(ArrClient):
     """Sonarr queue management client."""
@@ -250,11 +274,6 @@ class SonarrClient(ArrClient):
     @override
     def _command_name(self) -> str:
         return 'EpisodeSearch'
-
-    @property
-    @override
-    def _id_field(self) -> str:
-        return 'episodeIds'
 
     @override
     def _get_media_id(self, record: dict) -> int:
@@ -267,6 +286,11 @@ class SonarrClient(ArrClient):
     @override
     def _get_record_title(self, record: dict) -> str:
         return record.get('title', f'Queue item {record.get("id", "Unknown")}')
+
+    @property
+    @override
+    def _id_field(self) -> str:
+        return 'episodeIds'
 
 
 class LidarrClient(ArrClient):
@@ -281,11 +305,6 @@ class LidarrClient(ArrClient):
     def _command_name(self) -> str:
         return 'AlbumSearch'
 
-    @property
-    @override
-    def _id_field(self) -> str:
-        return 'albumIds'
-
     @override
     def _get_media_id(self, record: dict) -> int:
         return record['albumId']
@@ -297,3 +316,8 @@ class LidarrClient(ArrClient):
     @override
     def _get_record_title(self, record: dict) -> str:
         return record.get('title', f'Queue item {record.get("id", "Unknown")}')
+
+    @property
+    @override
+    def _id_field(self) -> str:
+        return 'albumIds'

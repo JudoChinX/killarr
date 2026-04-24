@@ -18,9 +18,10 @@ To be absolutely clear, Killarr does not and will never:
 
 ## Verify It Yourself
 
-The entire application is three source files. The links below track the `main` branch — once a stable release tag exists, they will be updated to point to it:
+The entire application is four source files. The links below track the `main` branch — once a stable release tag exists, they will be updated to point to it:
 
 - [`killarr/main.py`](https://github.com/JudoChinX/killarr/blob/main/killarr/main.py) — orchestration loop
+- [`killarr/classifier.py`](https://github.com/JudoChinX/killarr/blob/main/killarr/classifier.py) — stall reason classification
 - [`killarr/config_parser.py`](https://github.com/JudoChinX/killarr/blob/main/killarr/config_parser.py) — configuration loading and validation
 - [`killarr/clients/arr.py`](https://github.com/JudoChinX/killarr/blob/main/killarr/clients/arr.py) — \*arr API client
 
@@ -36,18 +37,18 @@ Killarr interacts exclusively with your configured Radarr, Sonarr, and Lidarr in
 |---|---|---|---|
 | `/api/v3/queue` (or `/api/v1/queue` for Lidarr) | GET | Fetch all queue records; filtered client-side for `trackedDownloadStatus == "warning"` | Every cycle |
 | `/api/v3/queue/{id}` (or `/api/v1/queue/{id}` for Lidarr) | DELETE | Remove a stalled queue item; optional `removeFromClient` and `blocklist` params | Per stalled item found |
-| `/api/v3/command` (or `/api/v1/command` for Lidarr) | POST | Trigger a fresh search (`MoviesSearch`, `EpisodeSearch`, or `AlbumSearch`) | Per removal, only if `search_again: true` |
+| `/api/v3/command` (or `/api/v1/command` for Lidarr) | POST | Trigger a fresh search (`MoviesSearch`, `EpisodeSearch`, or `AlbumSearch`) | Per removal, only if action is `retry` or `blocklist` |
 | `/api/v3/tag` (or `/api/v1/tag` for Lidarr) | GET | Resolve configured tag names to IDs | Startup only, if `include_tags` or `exclude_tags` are configured |
 
 **Data Accessed:**
-- Queue metadata only: titles, IDs, download status
+- Queue metadata only: titles, IDs, download status, status messages
 - No media files, no user data, no download client credentials
 - No access to authentication credentials beyond the API keys provided in `config.yaml`
 
 **Write Operations:**
 The DELETE and POST operations are the only mutations Killarr performs:
 - **DELETE** removes the stalled item from the \*arr queue. This is the same action as clicking "Remove" in the \*arr web interface.
-- **POST** triggers a fresh search command — the same as clicking "Search" manually. This only happens when `search_again: true` (the default).
+- **POST** triggers a fresh search command — the same as clicking "Search" manually. This only happens when the resolved action for a stall is `retry` or `blocklist`.
 
 Killarr does not:
 - Modify library settings or quality profiles

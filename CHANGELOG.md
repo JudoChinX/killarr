@@ -9,24 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `KILLARR_INSTANCE_SOURCE=shared`: when set, Killarr reads `RANGARR_INSTANCE_*` environment variables for instance definitions instead of `KILLARR_INSTANCE_*`, mirroring the shared `config.yaml` experience for env-var deployments
-
-## [0.1.0] - 2026-04-15
-
-### Added
-
 - Queue fetch with client-side stall filtering (`trackedDownloadStatus == "warning"`)
-- Configurable `remove_from_client` flag: delete the stalled file from the download client
-- Configurable `blocklist` flag: add the removed release to the blocklist to prevent re-grabbing
-- Configurable `search_again` flag: trigger a fresh search after removal
+- Stall reason classification: inspects `statusMessages` to categorise stalls (e.g., `no_upgrade`, `manual_import`, `missing_items`)
+- Named action dispatch: assign `ignore`, `remove`, `retry`, or `blocklist` actions per stall category (resolves globally or per instance)
 - Batch size controls: `0` (disabled), `-1` (unlimited), `N > 0` (limit removals per cycle)
 - `stagger_interval_seconds`: wait between individual removal operations
 - Tag filtering via `include_tags` and `exclude_tags` (resolved from *arr instances at startup)
 - Dry run mode: log what would be removed without making any changes
 - Environment variable config mode (`KILLARR_CONFIG_SOURCE=env`) with `KILLARR_GLOBAL_*` and `KILLARR_INSTANCE_<n>_*` variables
+- `KILLARR_INSTANCE_SOURCE=shared`: when set, Killarr reads `RANGARR_INSTANCE_*` environment variables for instance definitions instead of `KILLARR_INSTANCE_*`, mirroring the shared `config.yaml` experience for env-var deployments
 - Shared config format: reads `killarr:` + `instances:` sections; compatible with Rangarr's `global:` + `instances:` layout in the same file
 - Per-instance `killarr:` overrides: any global setting can be overridden per instance
 - Radarr support (v3 API endpoints: `/api/v3/queue`, `/api/v3/command`)
 - Sonarr support (v3 API endpoints: `/api/v3/queue`, `/api/v3/command`)
 - Lidarr support (v1 API endpoints: `/api/v1/queue`, `/api/v1/command`)
 - Multi-stage distroless Docker image (`gcr.io/distroless/python3-debian13`) running as `nonroot` (UID 65532)
+- Comprehensive test suite (159 tests) with 99% coverage
