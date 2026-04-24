@@ -13,6 +13,7 @@ from killarr.clients.arr import SonarrClient
 from killarr.main import _get_setting
 from killarr.main import _run_removal_cycle
 from killarr.main import build_arr_clients
+from tests.helpers import mock_queue_response
 
 # --- _get_setting ---
 
@@ -339,9 +340,10 @@ def test_run_env_source_loads_from_env(monkeypatch: Any) -> None:
         call_count += 1
         raise KeyboardInterrupt
 
-    with patch('time.sleep', side_effect=fake_sleep):
-        with pytest.raises(KeyboardInterrupt):
-            run()
+    with patch('requests.Session.get', return_value=mock_queue_response([])):
+        with patch('time.sleep', side_effect=fake_sleep):
+            with pytest.raises(KeyboardInterrupt):
+                run()
     assert call_count == 1
 
 
@@ -388,7 +390,8 @@ def test_run_loop_executes_cycle_and_sleeps(monkeypatch: Any) -> None:
         raise KeyboardInterrupt
 
     with patch('killarr.main._load_config_from_paths', return_value=config):
-        with patch('time.sleep', side_effect=fake_sleep):
-            with pytest.raises(KeyboardInterrupt):
-                run()
+        with patch('requests.Session.get', return_value=mock_queue_response([])):
+            with patch('time.sleep', side_effect=fake_sleep):
+                with pytest.raises(KeyboardInterrupt):
+                    run()
     assert sleep_calls == [10]
