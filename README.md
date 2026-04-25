@@ -54,7 +54,7 @@
 - **Batch Size Controls:** Limit removals per cycle (`0` = disabled, `-1` = unlimited, `N` = limit to N).
 - **Tag Filtering:** Include or exclude items based on tags set in your \*arr instances.
 - **Dry Run Mode:** Log what would be removed without making any changes.
-- **Shared Config with Rangarr:** Killarr reads the same `instances:` section as Rangarr. Both tools can share a single `config.yaml` — no duplication required.
+- **Shared Config with [Rangarr](https://github.com/JudoChinX/rangarr):** Killarr reads the same `instances:` section as Rangarr. Both tools can share a single `config.yaml` — no duplication required.
 
 ## Why Killarr?
 
@@ -64,7 +64,7 @@ Killarr acts as an automated cleanup crew. By identifying these stuck items and 
 
 ## Documentation
 
-- **[User Guide](docs/user-guide.md)** — Setup, configuration, Docker networking, shared config with Rangarr, and troubleshooting.
+- **[User Guide](docs/user-guide.md)** — Setup, configuration, Docker networking, shared config with [Rangarr](https://github.com/JudoChinX/rangarr), and troubleshooting.
 - **[Technical Audit](docs/technical-audit.md)** — Architecture, security model, and design philosophy.
 - **[Style Guide](docs/style-guide.md)** — Coding standards and contribution guidelines.
 
@@ -103,6 +103,10 @@ instances:
 ```
 
 See [config.example.yaml](config.example.yaml) for a full reference including tag filtering and per-instance overrides.
+
+## Related Projects
+
+- **[Rangarr](https://github.com/JudoChinX/rangarr)** — Automates and staggers media searches across Radarr, Sonarr, and Lidarr. Shares the same `config.yaml` format as Killarr — both tools can run side-by-side from a single config file.
 
 ## Contributing
 
