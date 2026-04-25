@@ -124,7 +124,7 @@ Each cycle:
 - `LidarrClient`: Lidarr-specific implementation (v1 endpoints, `albumId`, `AlbumSearch` command).
 
 **Key Methods:**
-- `get_stalled_items()`: Fetches the full queue, filters for stalled items, classifies them via `classifier.py`, and applies tag filtering and batch limits. Returns a list of `(queue_id, media_id, title, action)` tuples.
+- `get_stalled_items()`: Fetches the full queue, filters for stalled items, classifies them via `classifier.py`, and applies tag filtering and batch limits. Returns a tuple of `(actionable_items, skip_stats)` where `skip_stats` is a dictionary of evaluation and skip counts.
 - `_fetch_all_queue()`: Paginates through the \*arr queue endpoint until all records are retrieved.
 - `_is_stalled()`: Returns `True` if `trackedDownloadStatus == "warning"`.
 - `remove_stalled()`: Iterates over stalled items, calling `_remove_single()` with optional stagger sleep between items.
@@ -342,7 +342,8 @@ Don't trust documentation — verify the claims:
 
 1. **Run the tests:** `pytest` — see that security-relevant code is tested.
 2. **Read the code:** Start with `killarr/main.py` — 184 lines.
-3. **Check the API calls:** Enable `LOG_LEVEL=DEBUG` — every HTTP request is logged.
-4. **Review dependencies:** `cat requirements.txt` — two libraries, both standard.
+3. **Check the API calls:** Enable `LOG_LEVEL=DEBUG` — every HTTP request and detailed skip reasons are logged.
+4. **Observe the cycle:** Look for cycle summaries in the logs (`Found X items to remove (Evaluated: Y, Skipped: Z)`) to confirm operation.
+5. **Review dependencies:** `cat requirements.txt` — two libraries, both standard.
 
 If anything in this document contradicts the code, the code is correct and this document needs updating. File an issue.

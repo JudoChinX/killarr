@@ -5,6 +5,7 @@ fetching queue items, removing those in warning status, and repeating at
 scheduled intervals.
 """
 
+import datetime
 import logging
 import os
 import sys
@@ -42,6 +43,23 @@ _CLIENT_MAP: dict[str, type[ArrClient]] = {
     'radarr': RadarrClient,
     'sonarr': SonarrClient,
 }
+
+
+def _calculate_eta(item_count: int, stagger_seconds: int) -> str:
+    """Calculate and format estimated time for batch processing."""
+    result = ''
+    if stagger_seconds > 0 and item_count > 0:
+        eta = datetime.timedelta(seconds=item_count * stagger_seconds)
+        result = f', 1 every {stagger_seconds}s, ETA: {eta}'
+    return result
+
+
+def _format_cycle_info(client_name: str, item_count: int, skip_stats: dict[str, int], stagger_seconds: int) -> str:
+    """Format cycle processing info message with counts and ETA."""
+    total_eval = skip_stats['total_evaluated']
+    skipped = skip_stats['ignored'] + skip_stats['tag_filtered']
+    eta_str = _calculate_eta(item_count, stagger_seconds)
+    return f'[{client_name}] Found {item_count} items to remove (Evaluated: {total_eval}, Skipped: {skipped}{eta_str}).'
 
 
 def _get_setting(settings: dict, key: str) -> Any:
@@ -84,6 +102,10 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
     stagger = _get_setting(settings, 'stagger_interval_seconds')
     dry_run = _get_setting(settings, 'dry_run')
     dry_run_str = ' (DRY RUN ENABLED)' if dry_run else ''
+    stall_actions = {
+        category: settings.get(category, settings.get('stalled', 'ignore')) for category in STALL_CATEGORIES
+    }
+    action_str = ', '.join(f'{category}={action}' for category, action in stall_actions.items())
 
     _LOGGER.info(
         f'Killarr started{dry_run_str} | '
@@ -91,7 +113,7 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
         f'Run Interval: {_get_setting(settings, "interval")}s | '
         f'Batch: {batch_str} | '
         f'Stagger: {stagger}s | '
-        f'Stall handling: action-based'
+        f'Handling: {action_str}'
     )
 
 
@@ -100,11 +122,14 @@ def _run_removal_cycle(active_clients: list[Any], _settings: dict) -> None:
     _LOGGER.info('--- Starting removal cycle ---')
 
     for client in active_clients:
-        items = client.get_stalled_items()
+        items, skip_stats = client.get_stalled_items()
         if not items:
-            _LOGGER.info(f'[{client.name}] No stalled items found this cycle.')
+            _LOGGER.info(
+                f'[{client.name}] No stalled items found this cycle (Evaluated: {skip_stats["total_evaluated"]}).'
+            )
             continue
-        _LOGGER.info(f'[{client.name}] Found {len(items)} stalled item(s). Removing...')
+
+        _LOGGER.info(_format_cycle_info(client.name, len(items), skip_stats, client.stagger_seconds))
         client.remove_stalled(items)
 
 

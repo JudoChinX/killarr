@@ -452,12 +452,13 @@ If you have media that should never be auto-removed (e.g., seeding torrents, man
 
 ### No Stalled Items Found
 
-**"No stalled items found this cycle"** is normal if your queues are healthy.
+**"No stalled items found this cycle (Evaluated: X)"** is normal if your queues are healthy. The "Evaluated" count shows the total number of items found in the queue across all pages before filtering for stalls.
 
 If you believe items are stalled but Killarr is not finding them:
 
-1. **Enable debug logging** to see every queue record evaluated (`LOG_LEVEL=DEBUG`).
+1. **Enable debug logging** to see every queue record evaluated (`LOG_LEVEL=DEBUG`). You will now see detailed skip reasons (e.g., `action: ignore`, `tag filter`, or `not_stalled`).
 2. **Verify in \*arr UI:** Go to Activity → Queue. Killarr detects items with "Warning" status.
+
 
 ### "chmod 644" Reminder
 

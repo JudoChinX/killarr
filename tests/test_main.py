@@ -10,12 +10,74 @@ import pytest
 from killarr.clients.arr import LidarrClient
 from killarr.clients.arr import RadarrClient
 from killarr.clients.arr import SonarrClient
+from killarr.main import _calculate_eta
+from killarr.main import _format_cycle_info
 from killarr.main import _get_setting
 from killarr.main import _run_removal_cycle
 from killarr.main import build_arr_clients
 from tests.helpers import mock_queue_response
 
-# --- _get_setting ---
+_calculate_eta_cases = {
+    'no_stagger_returns_empty': {
+        'item_count': 3,
+        'stagger_seconds': 0,
+        'expected': '',
+    },
+    'no_items_returns_empty': {
+        'item_count': 0,
+        'stagger_seconds': 5,
+        'expected': '',
+    },
+    'with_stagger_and_items': {
+        'item_count': 2,
+        'stagger_seconds': 5,
+        'expected': ', 1 every 5s, ETA: 0:00:10',
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'item_count, stagger_seconds, expected',
+    [(case['item_count'], case['stagger_seconds'], case['expected']) for case in _calculate_eta_cases.values()],
+    ids=list(_calculate_eta_cases.keys()),
+)
+def test_calculate_eta(item_count: Any, stagger_seconds: Any, expected: Any) -> None:
+    """Test that _calculate_eta returns the correct ETA string."""
+    assert _calculate_eta(item_count, stagger_seconds) == expected
+
+
+_format_cycle_info_cases = {
+    'basic_no_stagger': {
+        'client_name': 'Radarr',
+        'item_count': 3,
+        'skip_stats': {'total_evaluated': 10, 'ignored': 4, 'tag_filtered': 3},
+        'stagger_seconds': 0,
+        'expected': '[Radarr] Found 3 items to remove (Evaluated: 10, Skipped: 7).',
+    },
+    'with_stagger_eta': {
+        'client_name': 'Radarr',
+        'item_count': 2,
+        'skip_stats': {'total_evaluated': 10, 'ignored': 4, 'tag_filtered': 3},
+        'stagger_seconds': 5,
+        'expected': '[Radarr] Found 2 items to remove (Evaluated: 10, Skipped: 7, 1 every 5s, ETA: 0:00:10).',
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'client_name, item_count, skip_stats, stagger_seconds, expected',
+    [
+        (case['client_name'], case['item_count'], case['skip_stats'], case['stagger_seconds'], case['expected'])
+        for case in _format_cycle_info_cases.values()
+    ],
+    ids=list(_format_cycle_info_cases.keys()),
+)
+def test_format_cycle_info(
+    client_name: Any, item_count: Any, skip_stats: Any, stagger_seconds: Any, expected: Any
+) -> None:
+    """Test that _format_cycle_info returns the correct formatted string."""
+    assert _format_cycle_info(client_name, item_count, skip_stats, stagger_seconds) == expected
+
 
 _get_setting_cases = {
     'returns_value_from_dict': {
@@ -44,9 +106,6 @@ _get_setting_cases = {
 def test_get_setting(settings: Any, key: Any, expected: Any) -> None:
     """Test that _get_setting returns the dict value or falls back to schema default."""
     assert _get_setting(settings, key) == expected
-
-
-# --- build_arr_clients ---
 
 
 def _make_instances_config(
@@ -141,14 +200,14 @@ def test_build_arr_clients_returns_empty_for_empty_config() -> None:
     assert not clients
 
 
-# --- _run_removal_cycle ---
-
-
 def _make_mock_client(name: str = 'TestClient', stalled_items: list | None = None) -> MagicMock:
     """Build a mock arr client with a configurable get_stalled_items return value."""
     client = MagicMock()
     client.name = name
-    client.get_stalled_items.return_value = stalled_items or []
+    client.stagger_seconds = 0
+    actual_items = stalled_items or []
+    stats = {'total_evaluated': len(actual_items), 'ignored': 0, 'tag_filtered': 0, 'not_stalled': 0}
+    client.get_stalled_items.return_value = (actual_items, stats)
     return client
 
 
@@ -210,9 +269,16 @@ def test_run_removal_cycle_logs_no_stalled_when_empty(caplog: Any) -> None:
     with caplog.at_level(logging.INFO):
         _run_removal_cycle([client], {})
     assert 'No stalled items' in caplog.text
+    assert '(Evaluated: 0)' in caplog.text
 
 
-# --- run() integration ---
+def test_run_removal_cycle_logs_found_items_with_summary(caplog: Any) -> None:
+    """Test that _run_removal_cycle logs cycle info when items are found."""
+    client = _make_mock_client(name='Radarr', stalled_items=[(1, 10, 'Movie')])
+    with caplog.at_level(logging.INFO):
+        _run_removal_cycle([client], {})
+    assert 'Found 1 items to remove' in caplog.text
+    assert 'Evaluated:' in caplog.text
 
 
 def test_run_exits_when_no_config() -> None:
@@ -237,9 +303,6 @@ def test_run_exits_when_no_active_clients() -> None:
 
             run()
     assert exc_info.value.code == 1
-
-
-# --- _load_config_from_paths ---
 
 
 def test_load_config_from_paths_loads_existing_file(tmp_path: Any) -> None:
@@ -281,9 +344,6 @@ def test_load_config_from_paths_skips_missing_tries_next(tmp_path: Any) -> None:
     assert result is not None
 
 
-# --- _log_killarr_start ---
-
-
 def test_log_killarr_start_logs_instance_count(caplog: Any) -> None:
     """Test that _log_killarr_start logs the number of active instances."""
     from killarr.main import _log_killarr_start
@@ -321,7 +381,14 @@ def test_log_killarr_start_shows_unlimited_batch(caplog: Any) -> None:
     assert 'Unlimited' in caplog.text
 
 
-# --- run() env and unrecognized source ---
+def test_log_killarr_start_shows_handling_actions(caplog: Any) -> None:
+    """Test that _log_killarr_start logs stall category actions."""
+    from killarr.main import _log_killarr_start
+
+    with caplog.at_level(logging.INFO):
+        _log_killarr_start([MagicMock()], {'stalled': 'remove'})
+    assert 'Handling:' in caplog.text
+    assert 'stalled=remove' in caplog.text
 
 
 def test_run_env_source_loads_from_env(monkeypatch: Any) -> None:

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Detailed logging: added skip reasons, cycle summaries with evaluation counts and removal ETAs, and enhanced startup diagnostics.
+
+
 ## [0.0.2] - 2026-04-25
 
 ### Added
