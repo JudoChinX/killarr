@@ -4,6 +4,7 @@ import logging
 import time
 from abc import ABC
 from abc import abstractmethod
+from typing import NamedTuple
 from typing import override
 
 import requests
@@ -12,7 +13,16 @@ from killarr.classifier import classify
 
 _LOGGER = logging.getLogger(__name__)
 
-type QueueItem = tuple[int, int, str, str]  # (queue_id, media_id, title, action)
+
+class QueueItem(NamedTuple):
+    """Represents a single stalled queue item to be acted upon."""
+
+    queue_id: int
+    media_id: int
+    title: str
+    action: str
+    category: str
+    messages: list[str]
 
 
 class ArrClient(ABC):
@@ -113,30 +123,35 @@ class ArrClient(ABC):
             or (self._include_tag_ids and not record_tag_ids & self._include_tag_ids)
         )
 
-    def _remove_single(self, queue_id: int, media_id: int, title: str, action: str, index: int, total: int) -> None:
+    def _remove_single(self, item: QueueItem, index: int, total: int) -> None:
         """DELETE a single queue item and optionally trigger a fresh search."""
+        _LOGGER.debug(f'[{self.name}] Stall details for "{item.title}": {item.messages}')
         if self.dry_run:
-            _LOGGER.info(f'[{self.name}] [DRY RUN] Would {action}: {title} ({index}/{total})')
+            _LOGGER.info(
+                f'[{self.name}] [DRY RUN] Would {item.action} ({item.category}): {item.title} ({index}/{total})'
+            )
             return
 
         params: dict[str, str] = {'removeFromClient': 'true'}
-        if action == 'blocklist':
+        if item.action == 'blocklist':
             params['blocklist'] = 'true'
 
-        url = f'{self.url}{self.ENDPOINT_QUEUE}/{queue_id}'
+        url = f'{self.url}{self.ENDPOINT_QUEUE}/{item.queue_id}'
         try:
             response = self.session.delete(url, params=params, timeout=15)
             if response.status_code == 404:
-                _LOGGER.info(f'[{self.name}] Removed ({action}, cascade): {title} ({index}/{total})')
+                _LOGGER.info(
+                    f'[{self.name}] Removed ({item.action}, {item.category}, cascade): {item.title} ({index}/{total})'
+                )
             else:
                 response.raise_for_status()
-                _LOGGER.info(f'[{self.name}] Removed ({action}): {title} ({index}/{total})')
+                _LOGGER.info(f'[{self.name}] Removed ({item.action}, {item.category}): {item.title} ({index}/{total})')
         except requests.RequestException as error:
-            _LOGGER.error(f'[{self.name}] Failed to remove {title} (ID: {queue_id}): {error}')
+            _LOGGER.error(f'[{self.name}] Failed to remove {item.title} (ID: {item.queue_id}): {error}')
             return
 
-        if action in ('retry', 'blocklist'):
-            self._trigger_search(media_id, title)
+        if item.action in ('retry', 'blocklist'):
+            self._trigger_search(item.media_id, item.title)
 
     def _resolve_action(self, category: str) -> str:
         """Resolve the action for a stall category using the config hierarchy."""
@@ -187,7 +202,7 @@ class ArrClient(ABC):
         """Fetch the queue, classify each stalled item, and return those with a non-ignore action.
 
         Returns:
-            List of (queue_id, media_id, title, action) tuples for actionable stalled items.
+            List of QueueItem named tuples for actionable stalled items.
         """
         if self.batch_size == 0:
             return []
@@ -199,15 +214,17 @@ class ArrClient(ABC):
             if not self._is_stalled(record):
                 continue
 
-            messages: list[str] = []
-            for msg_obj in record.get('statusMessages', []):
-                messages.extend(msg_obj.get('messages', []))
+            messages: list[str] = list(
+                dict.fromkeys(
+                    msg for msg_obj in record.get('statusMessages', []) for msg in msg_obj.get('messages', [])
+                )
+            )
 
             category = classify(messages)
             if category == 'unknown':
                 title = self._get_record_title(record)
                 _LOGGER.warning(
-                    f'[{self.name}] Unrecognised status messages for "{title}" '
+                    f'[{self.name}] Unrecognized status messages for "{title}" '
                     f'— please open a bug report at https://github.com/JudoChinX/killarr/issues '
                     f'with the following: {messages}'
                 )
@@ -224,7 +241,7 @@ class ArrClient(ABC):
             queue_id = record['id']
             media_id = self._get_media_id(record)
             title = self._get_record_title(record)
-            items.append((queue_id, media_id, title, action))
+            items.append(QueueItem(queue_id, media_id, title, action, category, messages))
 
             if self.batch_size > 0 and len(items) >= self.batch_size:
                 break
@@ -235,11 +252,11 @@ class ArrClient(ABC):
         """Remove each stalled item from the queue, staggering between calls.
 
         Args:
-            items: List of (queue_id, media_id, title, action) tuples.
+            items: List of QueueItem named tuples.
         """
         total = len(items)
-        for index, (queue_id, media_id, title, action) in enumerate(items, start=1):
-            self._remove_single(queue_id, media_id, title, action, index, total)
+        for index, item in enumerate(items, start=1):
+            self._remove_single(item, index, total)
             if self.stagger_seconds > 0 and index < total:
                 _LOGGER.debug(f'[{self.name}] Staggering next removal by {self.stagger_seconds}s.')
                 time.sleep(self.stagger_seconds)

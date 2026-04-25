@@ -29,7 +29,15 @@ def assert_config_result(result: Any, expected: Any) -> None:
 
 
 def mock_http_response(data: Any = None, status_code: int = 200) -> MagicMock:
-    """Return a mock HTTP response with raise_for_status and json()."""
+    """Return a mock HTTP response with raise_for_status and json().
+
+    Args:
+        data: Optional JSON data to return from mock.json().
+        status_code: HTTP status code for the response.
+
+    Returns:
+        A MagicMock configured as a requests.Response.
+    """
     mock = MagicMock()
     mock.status_code = status_code
     mock.raise_for_status.return_value = None
@@ -38,7 +46,14 @@ def mock_http_response(data: Any = None, status_code: int = 200) -> MagicMock:
 
 
 def mock_queue_response(records: list[dict]) -> MagicMock:
-    """Return a mock HTTP response shaped like the arr queue API."""
+    """Return a mock HTTP response shaped like the arr queue API.
+
+    Args:
+        records: List of queue record dicts to include in the response.
+
+    Returns:
+        A MagicMock configured as a successful queue API response.
+    """
     return mock_http_response({
         'records': records,
         'totalRecords': len(records),
@@ -48,5 +63,12 @@ def mock_queue_response(records: list[dict]) -> MagicMock:
 
 
 def mock_tag_response(tags: list[dict]) -> MagicMock:
-    """Return a mock HTTP response shaped like the arr tag API."""
+    """Return a mock HTTP response shaped like the arr tag API.
+
+    Args:
+        tags: List of tag dicts to include in the response.
+
+    Returns:
+        A MagicMock configured as a successful tag API response.
+    """
     return mock_http_response(tags)

@@ -610,7 +610,7 @@ def test_parse_config_with_actions() -> None:
 
 
 def test_parse_config_invalid_action() -> None:
-    """Test parse_config raises ValueError when a stall category has an unrecognised action value."""
+    """Test parse_config raises ValueError when a stall category has an unrecognized action value."""
     config = {
         'instances': {'r': {'type': 'radarr', 'url': 'http://h', 'api_key': 'k', 'enabled': True}},
         'killarr': {'stalled': 'invalid_action'},
