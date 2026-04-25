@@ -170,10 +170,10 @@ _resolve_action_cases = {
         'category': 'no_upgrade',
         'expected': 'remove',
     },
-    'unset_category_defaults_to_ignore': {
+    'unset_category_falls_back_to_stalled': {
         'settings': {'stalled': 'blocklist'},
         'category': 'no_upgrade',
-        'expected': 'ignore',
+        'expected': 'blocklist',
     },
     'no_settings_defaults_to_ignore': {
         'settings': {},

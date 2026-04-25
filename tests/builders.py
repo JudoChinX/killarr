@@ -144,6 +144,11 @@ class ClientBuilder:
             settings=self._settings,
         )
 
+    def lidarr(self) -> 'ClientBuilder':
+        """Use LidarrClient."""
+        self._class = LidarrClient
+        return self
+
     def radarr(self) -> 'ClientBuilder':
         """Use RadarrClient."""
         self._class = RadarrClient
@@ -154,17 +159,12 @@ class ClientBuilder:
         self._class = SonarrClient
         return self
 
-    def lidarr(self) -> 'ClientBuilder':
-        """Use LidarrClient."""
-        self._class = LidarrClient
+    def with_name(self, name: str) -> 'ClientBuilder':
+        """Set the instance name."""
+        self._name = name
         return self
 
     def with_settings(self, **settings: Any) -> 'ClientBuilder':
         """Override specific settings."""
         self._settings.update(settings)
-        return self
-
-    def with_name(self, name: str) -> 'ClientBuilder':
-        """Set the instance name."""
-        self._name = name
         return self
