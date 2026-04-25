@@ -42,6 +42,9 @@
   <a href="https://github.com/sponsors/JudoChinX">
     <img src="https://img.shields.io/badge/Sponsor-JudoChinX-ea4aaa?logo=github-sponsors" alt="Sponsor">
   </a>
+  <a href="https://github.com/JudoChinX/rangarr">
+    <img src="https://img.shields.io/badge/pairs%20with-Rangarr-blue" alt="Pairs with Rangarr">
+  </a>
 </p>
 
 **Killarr** is a lightweight service that detects and removes stalled downloads from Radarr, Sonarr, and Lidarr queues. It runs on a configurable schedule, finds items stuck with a warning status, removes them from the queue, and optionally triggers a fresh search.
