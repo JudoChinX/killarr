@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-04-25
+
+### Added
+
+- Update stall cause classifications based on arr source code. (#5)
+- Add Rangarr badge to README. (#4)
+- Add related projects to README. (#3)
+
+### Changed
+
+- Improve logging and deduplicate stall messages. (#6)
+
+
 ## [0.0.1] - 2026-04-25
 
 ### Added
