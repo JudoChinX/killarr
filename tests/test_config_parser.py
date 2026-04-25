@@ -598,12 +598,15 @@ def test_load_config_from_env_shared(monkeypatch: Any, env_vars: Any, expected_r
 def test_parse_config_with_actions() -> None:
     """Test parse_config accepts and preserves valid stall category action settings."""
     config = {
-        'instances': {'r': {'type': 'radarr', 'url': 'http://h', 'api_key': 'k', 'enabled': True}},
-        'killarr': {'no_upgrade': 'ignore', 'stalled': 'blocklist'},
+        'instances': {
+            'instance_radarr': {'type': 'radarr', 'url': 'http://host', 'api_key': 'test_key', 'enabled': True}
+        },
+        'killarr': {'no_upgrade': 'ignore', 'stalled': 'blocklist', 'dangerous_file': 'remove'},
     }
     result = parse_config(config)
     assert result['global_settings']['no_upgrade'] == 'ignore'
     assert result['global_settings']['stalled'] == 'blocklist'
+    assert result['global_settings']['dangerous_file'] == 'remove'
 
 
 def test_parse_config_invalid_action() -> None:

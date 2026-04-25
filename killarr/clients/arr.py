@@ -140,7 +140,11 @@ class ArrClient(ABC):
 
     def _resolve_action(self, category: str) -> str:
         """Resolve the action for a stall category using the config hierarchy."""
-        return self.settings.get(category) or 'ignore'
+        action = self.settings.get(category)
+        if not action and category != 'stalled':
+            action = self.settings.get('stalled')
+
+        return action or 'ignore'
 
     def _resolve_tag_ids(self) -> None:
         """Fetch instance tags and resolve configured tag names to IDs."""
@@ -241,6 +245,36 @@ class ArrClient(ABC):
                 time.sleep(self.stagger_seconds)
 
 
+class LidarrClient(ArrClient):
+    """Lidarr queue management client."""
+
+    ENDPOINT_QUEUE = '/api/v1/queue'
+    ENDPOINT_COMMAND = '/api/v1/command'
+    ENDPOINT_TAG = '/api/v1/tag'
+
+    @property
+    @override
+    def _command_name(self) -> str:
+        return 'AlbumSearch'
+
+    @override
+    def _get_media_id(self, record: dict) -> int:
+        return record['albumId']
+
+    @override
+    def _get_record_tags(self, record: dict) -> list[int]:
+        return record.get('artist', {}).get('tags', [])
+
+    @override
+    def _get_record_title(self, record: dict) -> str:
+        return record.get('title', f'Queue item {record.get("id", "Unknown")}')
+
+    @property
+    @override
+    def _id_field(self) -> str:
+        return 'albumIds'
+
+
 class RadarrClient(ArrClient):
     """Radarr queue management client."""
 
@@ -291,33 +325,3 @@ class SonarrClient(ArrClient):
     @override
     def _id_field(self) -> str:
         return 'episodeIds'
-
-
-class LidarrClient(ArrClient):
-    """Lidarr queue management client."""
-
-    ENDPOINT_QUEUE = '/api/v1/queue'
-    ENDPOINT_COMMAND = '/api/v1/command'
-    ENDPOINT_TAG = '/api/v1/tag'
-
-    @property
-    @override
-    def _command_name(self) -> str:
-        return 'AlbumSearch'
-
-    @override
-    def _get_media_id(self, record: dict) -> int:
-        return record['albumId']
-
-    @override
-    def _get_record_tags(self, record: dict) -> list[int]:
-        return record.get('artist', {}).get('tags', [])
-
-    @override
-    def _get_record_title(self, record: dict) -> str:
-        return record.get('title', f'Queue item {record.get("id", "Unknown")}')
-
-    @property
-    @override
-    def _id_field(self) -> str:
-        return 'albumIds'

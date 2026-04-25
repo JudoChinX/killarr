@@ -20,6 +20,7 @@ STALL_CATEGORIES = (
     'missing_items',
     'tba_title',
     'no_messages',
+    'dangerous_file',
     'unknown',
 )
 
@@ -138,13 +139,6 @@ def _validate_global_settings(settings: dict, schema: dict) -> None:
         )
 
 
-def _validate_stall_action_settings(settings: dict) -> None:
-    """Validate any stall category action values present in settings."""
-    for category in STALL_CATEGORIES:
-        if category in settings:
-            _validate_setting(category, settings[category], str, choices=VALID_ACTIONS)
-
-
 def _validate_setting(
     setting: str,
     value: Any,
@@ -182,6 +176,13 @@ def _validate_setting(
     if choices is not None and value not in choices:
         valid_choices = ', '.join(repr(c) for c in choices)
         raise ValueError(f"'{prefix}.{setting}' must be one of: {valid_choices}.")
+
+
+def _validate_stall_action_settings(settings: dict) -> None:
+    """Validate any stall category action values present in settings."""
+    for category in STALL_CATEGORIES:
+        if category in settings:
+            _validate_setting(category, settings[category], str, choices=VALID_ACTIONS)
 
 
 def get_setting_default(setting: str) -> Any:

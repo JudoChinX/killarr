@@ -35,6 +35,7 @@ killarr:
   # no_files: remove          # Nothing eligible for import
   # missing_items: remove     # Episodes/tracks missing from release
   # tba_title: ignore         # Episode title not yet announced
+  # dangerous_file: blocklist  # Fake/malicious releases (.exe, .iso)
 
   # include_tags: ["active"]   # Only act on items with ANY of these tags
   # exclude_tags: ["protected"] # Skip items with ANY of these tags
