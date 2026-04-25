@@ -195,7 +195,7 @@ def test_run_removal_cycle(
 ) -> None:
     """Test that _run_removal_cycle polls each client and removes stalled items as expected."""
     _run_removal_cycle(clients, {})
-    total_stalled_calls = sum(c.get_stalled_items.call_count for c in clients)
+    total_stalled_calls = sum(client.get_stalled_items.call_count for client in clients)
     assert total_stalled_calls == expect_stalled_call_count
     if expect_remove_called:
         clients[0].remove_stalled.assert_called_once_with(stalled_items)

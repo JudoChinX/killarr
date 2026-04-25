@@ -66,12 +66,26 @@ class RadarrQueueBuilder(_QueueRecordBuilder):
         }
 
     def with_movie_id(self, movie_id: int) -> Self:
-        """Set the movieId field."""
+        """Set the movieId field.
+
+        Args:
+            movie_id: The ID of the movie.
+
+        Returns:
+            The builder instance.
+        """
         self._data['movieId'] = movie_id
         return self
 
     def with_tags(self, tag_ids: list[int]) -> Self:
-        """Set root-level tags."""
+        """Set root-level tags.
+
+        Args:
+            tag_ids: List of integer tag IDs.
+
+        Returns:
+            The builder instance.
+        """
         self._data['tags'] = tag_ids
         return self
 
@@ -90,12 +104,26 @@ class SonarrQueueBuilder(_QueueRecordBuilder):
         }
 
     def with_episode_id(self, episode_id: int) -> Self:
-        """Set the episodeId field."""
+        """Set the episodeId field.
+
+        Args:
+            episode_id: The ID of the episode.
+
+        Returns:
+            The builder instance.
+        """
         self._data['episodeId'] = episode_id
         return self
 
     def with_tags(self, tag_ids: list[int]) -> Self:
-        """Set tags on the nested series dict."""
+        """Set tags on the nested series dict.
+
+        Args:
+            tag_ids: List of integer tag IDs.
+
+        Returns:
+            The builder instance.
+        """
         self._data['series']['tags'] = tag_ids
         return self
 
@@ -114,12 +142,26 @@ class LidarrQueueBuilder(_QueueRecordBuilder):
         }
 
     def with_album_id(self, album_id: int) -> Self:
-        """Set the albumId field."""
+        """Set the albumId field.
+
+        Args:
+            album_id: The ID of the album.
+
+        Returns:
+            The builder instance.
+        """
         self._data['albumId'] = album_id
         return self
 
     def with_tags(self, tag_ids: list[int]) -> Self:
-        """Set tags on the nested artist dict."""
+        """Set tags on the nested artist dict.
+
+        Args:
+            tag_ids: List of integer tag IDs.
+
+        Returns:
+            The builder instance.
+        """
         self._data['artist']['tags'] = tag_ids
         return self
 
@@ -136,7 +178,11 @@ class ClientBuilder:
         self._settings: dict[str, Any] = dict(DEFAULT_SETTINGS)
 
     def build(self) -> ArrClient:
-        """Instantiate and return the client."""
+        """Instantiate and return the client.
+
+        Returns:
+            An instance of the configured ArrClient subclass.
+        """
         return self._class(
             name=self._name,
             url=self._url,
@@ -145,26 +191,52 @@ class ClientBuilder:
         )
 
     def lidarr(self) -> 'ClientBuilder':
-        """Use LidarrClient."""
+        """Use LidarrClient.
+
+        Returns:
+            The builder instance.
+        """
         self._class = LidarrClient
         return self
 
     def radarr(self) -> 'ClientBuilder':
-        """Use RadarrClient."""
+        """Use RadarrClient.
+
+        Returns:
+            The builder instance.
+        """
         self._class = RadarrClient
         return self
 
     def sonarr(self) -> 'ClientBuilder':
-        """Use SonarrClient."""
+        """Use SonarrClient.
+
+        Returns:
+            The builder instance.
+        """
         self._class = SonarrClient
         return self
 
     def with_name(self, name: str) -> 'ClientBuilder':
-        """Set the instance name."""
+        """Set the instance name.
+
+        Args:
+            name: Human-readable name for the instance.
+
+        Returns:
+            The builder instance.
+        """
         self._name = name
         return self
 
     def with_settings(self, **settings: Any) -> 'ClientBuilder':
-        """Override specific settings."""
+        """Override specific settings.
+
+        Args:
+            **settings: Arbitrary setting overrides.
+
+        Returns:
+            The builder instance.
+        """
         self._settings.update(settings)
         return self

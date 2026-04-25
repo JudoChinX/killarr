@@ -48,7 +48,7 @@ _classify_cases = {
         ['Found matching movie via grab history, but release was matched to movie by ID. Manual Import required'],
         'manual_import',
     ),
-    'unknown_fallback': (['Some unrecognised warning message'], 'unknown'),
+    'unknown_fallback': (['Some unrecognized warning message'], 'unknown'),
     'empty_messages': ([], 'no_messages'),
     'multiple_messages_first_match_wins': (
         ['Not an upgrade for existing movie file(s)', 'Manual Import required'],

@@ -174,7 +174,7 @@ def _validate_setting(
                 raise ValueError(f"'{prefix}.{setting}' entries must not be empty strings.")
 
     if choices is not None and value not in choices:
-        valid_choices = ', '.join(repr(c) for c in choices)
+        valid_choices = ', '.join(repr(choice) for choice in choices)
         raise ValueError(f"'{prefix}.{setting}' must be one of: {valid_choices}.")
 
 
