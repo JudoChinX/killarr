@@ -198,20 +198,33 @@ class ArrClient(ABC):
         except requests.RequestException as error:
             _LOGGER.warning(f'[{self.name}] Failed to trigger search for {title} (ID: {media_id}): {error}')
 
-    def get_stalled_items(self) -> list[QueueItem]:
-        """Fetch the queue, classify each stalled item, and return those with a non-ignore action.
+    def get_stalled_items(self) -> tuple[list[QueueItem], dict[str, int]]:
+        """Fetch the queue, classify each stalled item, and return actionable items and skip stats.
 
         Returns:
-            List of QueueItem named tuples for actionable stalled items.
+            Tuple of (list of QueueItem, dict of skip reasons).
         """
         if self.batch_size == 0:
-            return []
+            return [], {
+                'total_evaluated': 0,
+                'ignored': 0,
+                'tag_filtered': 0,
+                'not_stalled': 0,
+            }
 
         all_records = self._fetch_all_queue()
         items: list[QueueItem] = []
+        skip_stats: dict[str, int] = {
+            'total_evaluated': len(all_records),
+            'ignored': 0,
+            'tag_filtered': 0,
+            'not_stalled': 0,
+        }
 
         for record in all_records:
+            title = self._get_record_title(record)
             if not self._is_stalled(record):
+                skip_stats['not_stalled'] += 1
                 continue
 
             messages: list[str] = list(
@@ -222,7 +235,6 @@ class ArrClient(ABC):
 
             category = classify(messages)
             if category == 'unknown':
-                title = self._get_record_title(record)
                 _LOGGER.warning(
                     f'[{self.name}] Unrecognized status messages for "{title}" '
                     f'— please open a bug report at https://github.com/JudoChinX/killarr/issues '
@@ -231,22 +243,23 @@ class ArrClient(ABC):
             action = self._resolve_action(category)
 
             if action == 'ignore':
+                _LOGGER.debug(f'[{self.name}] Skipping stalled item (action: ignore, category: {category}): {title}')
+                skip_stats['ignored'] += 1
                 continue
 
             if self._is_tag_filtered_out(record):
-                title = self._get_record_title(record)
                 _LOGGER.debug(f'[{self.name}] Skipping stalled item (tag filter): {title}')
+                skip_stats['tag_filtered'] += 1
                 continue
 
             queue_id = record['id']
             media_id = self._get_media_id(record)
-            title = self._get_record_title(record)
             items.append(QueueItem(queue_id, media_id, title, action, category, messages))
 
             if self.batch_size > 0 and len(items) >= self.batch_size:
                 break
 
-        return items
+        return items, skip_stats
 
     def remove_stalled(self, items: list[QueueItem]) -> None:
         """Remove each stalled item from the queue, staggering between calls.

@@ -20,8 +20,6 @@ from tests.helpers import mock_http_response
 from tests.helpers import mock_queue_response
 from tests.helpers import mock_tag_response
 
-# --- Init and session ---
-
 
 def test_client_sets_api_key_header() -> None:
     """Test that the session is initialized with the X-Api-Key header."""
@@ -55,9 +53,6 @@ def test_client_warns_on_non_https_url(caplog: Any) -> None:
     assert 'non-HTTPS' in caplog.text
 
 
-# --- Tag resolution ---
-
-
 def test_resolve_tag_ids_maps_names_to_ids() -> None:
     """Test that include_tags names are resolved to tag IDs from the *arr API."""
     tags = [{'id': 1, 'label': 'stalled'}, {'id': 2, 'label': 'active'}]
@@ -89,9 +84,6 @@ def test_tag_resolution_network_error_logs_error(caplog: Any) -> None:
             client = ClientBuilder().with_settings(include_tags=['stalled']).build()
     assert 'Failed to fetch tags' in caplog.text
     assert client._include_tag_ids == set()
-
-
-# --- Queue fetch and stall filtering ---
 
 
 def test_fetch_all_queue_returns_records() -> None:
@@ -134,8 +126,6 @@ def test_fetch_all_queue_handles_network_error(caplog: Any) -> None:
     assert 'Failed to fetch queue' in caplog.text
 
 
-# --- _is_stalled ---
-
 _is_stalled_cases = {
     'warning_record_is_stalled': {
         'record': RadarrQueueBuilder().warning().build(),
@@ -162,8 +152,6 @@ def test_is_stalled(record: Any, expected: Any) -> None:
     client = ClientBuilder().radarr().build()
     assert client._is_stalled(record) is expected
 
-
-# --- _resolve_action ---
 
 _resolve_action_cases = {
     'specific_category_setting_returned': {
@@ -200,9 +188,6 @@ def test_resolve_action(settings: Any, category: Any, expected: Any) -> None:
     assert client._resolve_action(category) == expected
 
 
-# --- get_stalled_items ---
-
-
 def test_get_stalled_items_returns_only_warning_items() -> None:
     """Test that get_stalled_items filters out non-warning records."""
     client = ClientBuilder().radarr().with_settings(no_messages='remove').build()
@@ -212,7 +197,7 @@ def test_get_stalled_items_returns_only_warning_items() -> None:
         RadarrQueueBuilder().warning().with_id(3).build(),
     ]
     client.session.get = MagicMock(return_value=mock_queue_response(records))
-    items = client.get_stalled_items()
+    items, _stats = client.get_stalled_items()
     assert len(items) == 2
     queue_ids = [item[0] for item in items]
     assert 1 in queue_ids
@@ -225,7 +210,7 @@ def test_get_stalled_items_respects_batch_size() -> None:
     client = ClientBuilder().radarr().with_settings(batch_size=2, no_messages='remove').build()
     records = [RadarrQueueBuilder().warning().with_id(index).build() for index in range(5)]
     client.session.get = MagicMock(return_value=mock_queue_response(records))
-    items = client.get_stalled_items()
+    items, _stats = client.get_stalled_items()
     assert len(items) == 2
 
 
@@ -234,7 +219,7 @@ def test_get_stalled_items_unlimited_batch() -> None:
     client = ClientBuilder().radarr().with_settings(batch_size=-1, no_messages='remove').build()
     records = [RadarrQueueBuilder().warning().with_id(index).build() for index in range(20)]
     client.session.get = MagicMock(return_value=mock_queue_response(records))
-    items = client.get_stalled_items()
+    items, _stats = client.get_stalled_items()
     assert len(items) == 20
 
 
@@ -243,8 +228,8 @@ def test_get_stalled_items_disabled_returns_empty() -> None:
     client = ClientBuilder().radarr().with_settings(batch_size=0).build()
     records = [RadarrQueueBuilder().warning().build()]
     client.session.get = MagicMock(return_value=mock_queue_response(records))
-    items = client.get_stalled_items()
-    assert items == []
+    items, _stats = client.get_stalled_items()
+    assert not items
 
 
 def test_get_stalled_items_applies_exclude_tag_filter() -> None:
@@ -257,7 +242,7 @@ def test_get_stalled_items_applies_exclude_tag_filter() -> None:
         RadarrQueueBuilder().warning().with_id(2).with_tags([]).build(),
     ]
     client.session.get = MagicMock(return_value=mock_queue_response(records))
-    items = client.get_stalled_items()
+    items, _stats = client.get_stalled_items()
     assert len(items) == 1
     assert items[0].queue_id == 2
 
@@ -267,7 +252,7 @@ def test_get_stalled_items_returns_queue_item_with_all_fields() -> None:
     client = ClientBuilder().radarr().with_settings(no_messages='blocklist').build()
     records = [RadarrQueueBuilder().warning().with_id(99).with_movie_id(42).with_title('My.Movie.mkv').build()]
     client.session.get = MagicMock(return_value=mock_queue_response(records))
-    items = client.get_stalled_items()
+    items, _stats = client.get_stalled_items()
     assert items[0].queue_id == 99
     assert items[0].media_id == 42
     assert items[0].title == 'My.Movie.mkv'
@@ -281,8 +266,9 @@ def test_get_stalled_items_skips_ignored_items() -> None:
     client = ClientBuilder().radarr().with_settings(stalled='ignore').build()
     records = [RadarrQueueBuilder().warning().with_id(1).build()]
     client.session.get = MagicMock(return_value=mock_queue_response(records))
-    items = client.get_stalled_items()
-    assert items == []
+    items, skip_stats = client.get_stalled_items()
+    assert not items
+    assert skip_stats['ignored'] == 1
 
 
 def test_get_stalled_items_classifies_from_status_messages() -> None:
@@ -296,7 +282,7 @@ def test_get_stalled_items_classifies_from_status_messages() -> None:
         .build()
     )
     client.session.get = MagicMock(return_value=mock_queue_response([record]))
-    items = client.get_stalled_items()
+    items, _stats = client.get_stalled_items()
     assert len(items) == 1
     assert items[0].action == 'retry'
     assert items[0].category == 'no_upgrade'
@@ -329,11 +315,43 @@ def test_get_stalled_items_skips_tag_filtered_logs_debug(caplog: Any) -> None:
     records = [RadarrQueueBuilder().warning().with_id(1).with_tags([]).build()]
     client.session.get = MagicMock(return_value=mock_queue_response(records))
     with caplog.at_level(logging.DEBUG):
-        items = client.get_stalled_items()
-    assert items == []
+        items, skip_stats = client.get_stalled_items()
+    assert not items
+    assert skip_stats['tag_filtered'] == 1
+    assert 'Skipping stalled item (tag filter)' in caplog.text
 
 
-# --- Remove and search-again ---
+def test_get_stalled_items_counts_not_stalled() -> None:
+    """Test that skip_stats['not_stalled'] reflects records that were not stalled."""
+    client = ClientBuilder().radarr().with_settings(no_messages='remove').build()
+    records = [
+        RadarrQueueBuilder().warning().with_id(1).build(),
+        RadarrQueueBuilder().ok().with_id(2).build(),
+        RadarrQueueBuilder().ok().with_id(3).build(),
+    ]
+    client.session.get = MagicMock(return_value=mock_queue_response(records))
+    items, skip_stats = client.get_stalled_items()
+    assert len(items) == 1
+    assert skip_stats['not_stalled'] == 2
+    assert skip_stats['total_evaluated'] == 3
+
+
+def test_get_stalled_items_logs_debug_for_ignored(caplog: Any) -> None:
+    """Test that a DEBUG log is emitted when a stalled item's action is 'ignore'."""
+    client = ClientBuilder().radarr().with_settings(stalled='ignore').build()
+    records = [
+        RadarrQueueBuilder()
+        .warning()
+        .with_id(1)
+        .with_title('Ignored.Movie.mkv')
+        .with_status_messages(['The download is stalled with no connections'])
+        .build()
+    ]
+    client.session.get = MagicMock(return_value=mock_queue_response(records))
+    with caplog.at_level(logging.DEBUG):
+        client.get_stalled_items()
+    assert 'Skipping stalled item (action: ignore, category: stalled)' in caplog.text
+    assert 'Ignored.Movie.mkv' in caplog.text
 
 
 def test_remove_stalled_calls_delete_for_each_item() -> None:
@@ -500,8 +518,6 @@ def test_remove_stalled_logs_stall_details_at_debug(caplog: Any) -> None:
     assert 'Deep detail 2' in caplog.text
 
 
-# --- Subclass static attributes ---
-
 _subclass_attr_cases = {
     'radarr_command_name': {'arr_type': 'radarr', 'attr': '_command_name', 'expected': 'MoviesSearch'},
     'radarr_id_field': {'arr_type': 'radarr', 'attr': '_id_field', 'expected': 'movieIds'},
@@ -523,8 +539,6 @@ def test_subclass_attr(arr_type: Any, attr: Any, expected: Any) -> None:
     assert getattr(client, attr) == expected
 
 
-# --- Subclass endpoint versions ---
-
 _endpoint_version_cases = {
     'radarr_queue_uses_v3': {'arr_type': 'radarr', 'endpoint_attr': 'ENDPOINT_QUEUE', 'version': 'v3'},
     'sonarr_queue_uses_v3': {'arr_type': 'sonarr', 'endpoint_attr': 'ENDPOINT_QUEUE', 'version': 'v3'},
@@ -543,9 +557,6 @@ def test_subclass_endpoint_version(arr_type: Any, endpoint_attr: Any, version: A
     """Test that each arr subclass uses the correct API version in its endpoint paths."""
     client = getattr(ClientBuilder(), arr_type)().build()
     assert version in getattr(client, endpoint_attr)
-
-
-# --- Subclass media ID and title extraction ---
 
 
 def test_radarr_get_media_id() -> None:

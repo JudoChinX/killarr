@@ -56,6 +56,7 @@
 - **Named Actions:** Assign `ignore`, `remove`, `retry`, or `blocklist` per category — globally or per instance.
 - **Batch Size Controls:** Limit removals per cycle (`0` = disabled, `-1` = unlimited, `N` = limit to N).
 - **Tag Filtering:** Include or exclude items based on tags set in your \*arr instances.
+- **Detailed Logging:** Cycle summaries with evaluation counts, removal ETAs, and granular skip reasons (DEBUG level).
 - **Dry Run Mode:** Log what would be removed without making any changes.
 - **Shared Config with [Rangarr](https://github.com/JudoChinX/rangarr):** Killarr reads the same `instances:` section as Rangarr. Both tools can share a single `config.yaml` — no duplication required.
 
