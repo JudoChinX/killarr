@@ -1,6 +1,8 @@
 """Tests for killarr main module."""
 
+import json
 import logging
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -15,7 +17,15 @@ from killarr.main import _format_cycle_info
 from killarr.main import _get_setting
 from killarr.main import _run_removal_cycle
 from killarr.main import build_arr_clients
-from tests.helpers import mock_queue_response
+from tests.helpers import mock_http_response
+
+_FIXTURES_DIR = Path(__file__).parent.parent / 'fixtures'
+
+
+def _load_fixture(arr_type: str, filename: str) -> dict:
+    """Load a JSON fixture file from the fixtures directory."""
+    return json.loads((_FIXTURES_DIR / arr_type / filename).read_text())
+
 
 _calculate_eta_cases = {
     'no_stagger_returns_empty': {
@@ -407,7 +417,8 @@ def test_run_env_source_loads_from_env(monkeypatch: Any) -> None:
         call_count += 1
         raise KeyboardInterrupt
 
-    with patch('requests.Session.get', return_value=mock_queue_response([])):
+    queue_data = _load_fixture('radarr', 'queue.json')
+    with patch('requests.Session.get', return_value=mock_http_response(queue_data)):
         with patch('time.sleep', side_effect=fake_sleep):
             with pytest.raises(KeyboardInterrupt):
                 run()
@@ -456,8 +467,9 @@ def test_run_loop_executes_cycle_and_sleeps(monkeypatch: Any) -> None:
         sleep_calls.append(interval)
         raise KeyboardInterrupt
 
+    queue_data = _load_fixture('radarr', 'queue.json')
     with patch('killarr.main._load_config_from_paths', return_value=config):
-        with patch('requests.Session.get', return_value=mock_queue_response([])):
+        with patch('requests.Session.get', return_value=mock_http_response(queue_data)):
             with patch('time.sleep', side_effect=fake_sleep):
                 with pytest.raises(KeyboardInterrupt):
                     run()

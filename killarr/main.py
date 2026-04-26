@@ -17,11 +17,11 @@ from killarr.clients.arr import ArrClient
 from killarr.clients.arr import LidarrClient
 from killarr.clients.arr import RadarrClient
 from killarr.clients.arr import SonarrClient
-from killarr.config_parser import SETTINGS_SCHEMA
-from killarr.config_parser import STALL_CATEGORIES
 from killarr.config_parser import get_setting_default
 from killarr.config_parser import load_config
 from killarr.config_parser import load_config_from_env
+from killarr.validators import SETTINGS_SCHEMA
+from killarr.validators import STALL_CATEGORIES
 
 if 'TZ' not in os.environ:
     os.environ['TZ'] = 'UTC'

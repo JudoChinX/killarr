@@ -88,7 +88,7 @@ skips = []
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-addopts = "--cov=killarr --cov-fail-under=95 --disable-socket"
+addopts = "--cov=killarr --cov-fail-under=95 --disable-socket -n auto"
 filterwarnings = [
     "error",
 ]

@@ -106,17 +106,19 @@ killarr_overrides = instance.pop('killarr', {})
 
 ### Function Ordering
 
-Functions are sorted alphabetically within a module. Private functions (`_name`) come before
-public ones.
+Private functions (`_name`) come before all public functions within a module. Within each
+group, functions are sorted alphabetically by name.
 
 ```python
-# Do (excerpt from main.py — all private functions precede all public ones)
-def _get_setting(...): ...          # private, 'g'
+# Do (excerpt from main.py — all private functions precede all public ones, each group sorted)
+def _calculate_eta(...): ...           # private, 'c'
+def _format_cycle_info(...): ...       # private, 'f'
+def _get_setting(...): ...             # private, 'g'
 def _load_config_from_paths(...): ...  # private, 'l'
-def _log_killarr_start(...): ...    # private, 'lo'
-def _run_removal_cycle(...): ...    # private, 'r'
-def build_arr_clients(...): ...     # public, 'b'
-def run(...): ...                   # public, 'r'
+def _log_killarr_start(...): ...       # private, 'lo'
+def _run_removal_cycle(...): ...       # private, 'r'
+def build_arr_clients(...): ...        # public, 'b'
+def run(...): ...                      # public, 'r'
 
 # Don't — unsorted or public before private
 def run(...): ...
@@ -568,33 +570,85 @@ def test_parse_config_missing_instances_raises_case(...): ...  # scenario alread
 Declare fixtures with `@pytest.fixture` at the top of the test file, before the first test.
 For fixtures shared across files, use `tests/conftest.py`.
 
-Annotate `yield`-based fixtures with `Generator[None, None, None]` — mypy enforces return types
-on all functions including fixtures:
+Use `monkeypatch` for simple attribute replacement. Annotate `yield`-based fixtures with
+`Generator[None, None, None]`; fixtures that only call `monkeypatch.setattr` return `None`.
 
 ```python
-# Do (from conftest.py)
-from collections.abc import Generator
-
-
+# Do (from conftest.py) — monkeypatch-based, no yield needed
 @pytest.fixture(autouse=True)
-def mock_sleep() -> Generator[None, None, None]:
-    """Block real sleeping in tests for speed and determinism."""
-    with patch('time.sleep'):
-        yield
+def block_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Block all unmocked HTTP requests to prevent accidental network calls."""
+
+    def mocked_request(*args: object, **kwargs: object) -> None:
+        raise UnmockedNetworkError(f'Unmocked network call attempted: {args} {kwargs}')
+
+    monkeypatch.setattr(requests.Session, 'request', mocked_request)
 
 
 # Don't — missing return type annotation (mypy will flag this)
 @pytest.fixture(autouse=True)
-def mock_sleep():
-    with patch('time.sleep'):
-        yield
+def block_network(monkeypatch):
+    monkeypatch.setattr(requests.Session, 'request', ...)
 ```
 
 `tests/conftest.py` provides two `autouse` fixtures active for every test:
 
-- `block_external_requests` — patches `requests.Session.request` to raise `RuntimeError` on any
-  unmocked HTTP call. This is the enforcement layer; if a test hits the network it fails loudly.
-- `mock_sleep` — patches `time.sleep` to prevent real sleeping and keep tests deterministic.
+- `block_network` — monkeypatches `requests.Session.request` to raise `UnmockedNetworkError` on
+  any unmocked HTTP call. This is the enforcement layer; if a test hits the network it fails loudly.
+- `pin_time` — pins `datetime.datetime.now()` to a fixed timestamp (`FIXED_NOW`) and suppresses
+  real sleeping via `time.sleep`. Keeps all time-dependent tests deterministic.
+
+### Deterministic Time
+
+Use the `pin_time` autouse fixture (from `conftest.py`) to freeze time in any test that depends
+on `datetime.datetime.now()`. The fixed timestamp is `FIXED_NOW = datetime.datetime(2026, 4, 23, 12, 0, 0, tzinfo=datetime.UTC)`.
+
+If a test needs to assert on a specific timestamp, reference `FIXED_NOW` directly rather than
+calling `datetime.datetime.now()` at runtime.
+
+```python
+# Do — reference the constant; pin_time guarantees they match
+from tests.conftest import FIXED_NOW
+
+assert event.timestamp == FIXED_NOW
+
+# Don't — calling now() at runtime may drift from the pinned value
+assert event.timestamp == datetime.datetime.now(tz=datetime.UTC)
+```
+
+### Nested Test Structure
+
+Tests are organized into three directories that mirror the testing pyramid:
+
+| Directory | Contains | Example |
+|---|---|---|
+| `tests/unit/` | Pure logic with no I/O or external state | `test_classifier.py`, `test_config_parser.py` |
+| `tests/integration/` | Components wired together, HTTP mocked | `test_arr_client.py` |
+| `tests/system/` | Full `run()` loop, fixtures loaded from JSON | `test_main.py` |
+
+JSON fixtures live in `tests/fixtures/<arr_type>/`. System tests load fixtures from disk using
+`_load_fixture(arr_type, filename)` so that realistic API shapes are version-controlled and
+reviewable separately from test logic.
+
+```python
+# Do (from tests/system/test_main.py)
+_FIXTURES_DIR = Path(__file__).parent.parent / 'fixtures'
+
+
+def _load_fixture(arr_type: str, filename: str) -> dict:
+    """Load a JSON fixture file from the fixtures directory."""
+    return json.loads((_FIXTURES_DIR / arr_type / filename).read_text())
+
+
+# In the test:
+queue_data = _load_fixture('radarr', 'queue.json')
+with patch('requests.Session.get', return_value=mock_http_response(queue_data)):
+    run()
+
+# Don't — inline construction duplicates API shape knowledge across tests
+with patch('requests.Session.get', return_value=mock_queue_response([])):
+    run()
+```
 
 ### Mocking HTTP Sessions
 
@@ -606,17 +660,19 @@ client = ClientBuilder().radarr().build()
 client.session.get = MagicMock(return_value=mock_queue_response(records))
 ```
 
-Use class-level `patch` when the client is constructed internally (e.g., tests that call
-`run()` directly and don't have access to the client instance):
+Use class-level `patch` when the client is constructed internally (e.g., system tests that call
+`run()` directly and don't have access to the client instance). Load response data from a JSON
+fixture rather than constructing it inline:
 
 ```python
-# Do — class-level (integration tests in test_main.py)
-with patch('requests.Session.get', return_value=mock_queue_response([])):
+# Do — class-level (system tests in test_main.py)
+queue_data = _load_fixture('radarr', 'queue.json')
+with patch('requests.Session.get', return_value=mock_http_response(queue_data)):
     run()
 ```
 
-Both approaches bypass the `block_external_requests` fixture safely: replacing `get` at either
-level prevents the call from reaching `request`, so the fixture's `RuntimeError` is never raised.
+Both approaches bypass the `block_network` fixture safely: replacing `get` at either level
+prevents the call from reaching `request`, so the fixture's `UnmockedNetworkError` is never raised.
 
 ### Log Assertions
 
