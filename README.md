@@ -111,6 +111,10 @@ See [config.example.yaml](config.example.yaml) for a full reference including ta
 
 - **[Rangarr](https://github.com/JudoChinX/rangarr)** — Automates and staggers media searches across Radarr, Sonarr, and Lidarr. Shares the same `config.yaml` format as Killarr — both tools can run side-by-side from a single config file.
 
+## Development Transparency
+
+AI tooling was used to assist with development tasks in this project. The architecture — no database, no persistence layer, four files, two dependencies — was designed by the author. All code is human-reviewed before inclusion.
+
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Style Guide](docs/style-guide.md) for details.
