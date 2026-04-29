@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from killarr.config_parser import _expand_env_vars
 from killarr.config_parser import get_setting_default
 from killarr.config_parser import load_config
 from killarr.config_parser import load_config_from_env
@@ -241,6 +242,31 @@ def test_parse_config_instance_without_killarr_override_has_no_instance_setting(
 
 
 # --- load_config from file ---
+
+
+_expand_env_vars_cases = {
+    'int_expansion': {'env_vars': {'INT_VAR': '1800'}, 'src': '${INT_VAR}', 'expected': 1800},
+    'bool_expansion': {'env_vars': {'BOOL_VAR': 'true'}, 'src': '${BOOL_VAR}', 'expected': True},
+    'float_expansion': {'env_vars': {'FLOAT_VAR': '1.5'}, 'src': '${FLOAT_VAR}', 'expected': 1.5},
+    'literal_numeric_remains_string': {'env_vars': {}, 'src': '12345', 'expected': '12345'},
+    'mixed_string_remains_string': {
+        'env_vars': {'HOST': 'localhost'},
+        'src': 'http://${HOST}:7878',
+        'expected': 'http://localhost:7878',
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'env_vars, src, expected',
+    [(case['env_vars'], case['src'], case['expected']) for case in _expand_env_vars_cases.values()],
+    ids=list(_expand_env_vars_cases.keys()),
+)
+def test_expand_env_vars(monkeypatch: Any, env_vars: Any, src: Any, expected: Any) -> None:
+    """Test that _expand_env_vars expands placeholders and converts types correctly."""
+    for key, value in env_vars.items():
+        monkeypatch.setenv(key, value)
+    assert _expand_env_vars(src) == expected
 
 
 def test_load_config_from_file(tmp_path: Any) -> None:

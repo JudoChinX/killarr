@@ -2,6 +2,7 @@
 
 import json
 import logging
+import textwrap
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -12,6 +13,7 @@ import pytest
 from killarr.clients.arr import LidarrClient
 from killarr.clients.arr import RadarrClient
 from killarr.clients.arr import SonarrClient
+from killarr.config_parser import load_config
 from killarr.main import _calculate_eta
 from killarr.main import _format_cycle_info
 from killarr.main import _get_setting
@@ -474,3 +476,28 @@ def test_run_loop_executes_cycle_and_sleeps(monkeypatch: Any) -> None:
                 with pytest.raises(KeyboardInterrupt):
                     run()
     assert sleep_calls == [10]
+
+
+def test_load_config_with_expanded_types(tmp_path: Any, monkeypatch: Any) -> None:
+    """Test that load_config correctly expands and types environment variables in YAML."""
+    monkeypatch.setenv('TEST_INTERVAL', '900')
+    monkeypatch.setenv('TEST_DRY_RUN', 'true')
+
+    cfg = tmp_path / 'config.yaml'
+    cfg.write_text(
+        textwrap.dedent("""
+        killarr:
+          interval: ${TEST_INTERVAL}
+          dry_run: ${TEST_DRY_RUN}
+        instances:
+          radarr:
+            type: radarr
+            host: "http://r"
+            api_key: "k"
+            enabled: true
+    """)
+    )
+
+    result = load_config(str(cfg))
+    assert result['global_settings']['interval'] == 900
+    assert result['global_settings']['dry_run'] is True
