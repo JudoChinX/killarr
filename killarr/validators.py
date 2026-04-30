@@ -82,6 +82,11 @@ SETTINGS_SCHEMA = {
         'type': int,
         'allow_special_values': True,
     },
+    'retry_interval_minutes': {
+        'default': 0,
+        'type': int,
+        'min_value': 0,
+    },
     'dry_run': {
         'default': False,
         'type': bool,

@@ -77,6 +77,7 @@ def test_parse_active_hours(value: str, expected: tuple) -> None:
 _get_setting_default_cases = {
     'interval': {'setting': 'interval', 'expected': 3600},
     'batch_size': {'setting': 'batch_size', 'expected': 10},
+    'retry_interval_minutes': {'setting': 'retry_interval_minutes', 'expected': 0},
     'dry_run': {'setting': 'dry_run', 'expected': False},
     'stagger_interval_seconds': {'setting': 'stagger_interval_seconds', 'expected': 5},
 }
@@ -146,6 +147,22 @@ _parse_config_cases = {
             instances={'r': {'type': 'plex', 'host': 'http://x', 'api_key': 'k', 'enabled': True}}
         ),
         'expected_error': "Invalid type 'plex' for instance 'r'. Must be one of: radarr, sonarr, lidarr.",
+    },
+    'retry_interval_minutes_defaults_to_zero': {
+        'config_data': make_config(),
+        'expected_result': {'global_settings': {'retry_interval_minutes': 0}},
+    },
+    'retry_interval_minutes_accepts_positive_int': {
+        'config_data': make_config(killarr_section={'retry_interval_minutes': 24}),
+        'expected_result': {'global_settings': {'retry_interval_minutes': 24}},
+    },
+    'retry_interval_minutes_rejects_negative': {
+        'config_data': make_config(killarr_section={'retry_interval_minutes': -1}),
+        'expected_error': "'killarr.retry_interval_minutes' must be at least 0.",
+    },
+    'retry_interval_minutes_rejects_non_int': {
+        'config_data': make_config(killarr_section={'retry_interval_minutes': '1h'}),
+        'expected_error': "'killarr.retry_interval_minutes' must be of type int.",
     },
     'invalid_batch_size_raises': {
         'config_data': make_config(killarr_section={'batch_size': -2}),

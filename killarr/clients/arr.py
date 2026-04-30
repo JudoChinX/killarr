@@ -1,5 +1,6 @@
 """*arr API clients: base class and app-specific subclasses for queue management."""
 
+import datetime
 import logging
 import time
 from abc import ABC
@@ -54,8 +55,10 @@ class ArrClient(ABC):
         self.settings = settings
         self.weight = weight
         self.batch_size: int = settings.get('batch_size', 10)
+        self.retry_interval_minutes: int = settings.get('retry_interval_minutes', 0)
         self.stagger_seconds: int = settings.get('stagger_interval_seconds', 5)
         self.dry_run: bool = settings.get('dry_run', False)
+        self._retry_state: dict[int, datetime.datetime] = {}
         if not self.url.lower().startswith('https://'):
             _LOGGER.warning(
                 f"Client '{name}' is using a non-HTTPS URL ({self.url}). API keys will be transmitted in plaintext."
@@ -115,6 +118,16 @@ class ArrClient(ABC):
         """Return True if the record is considered stalled by the arr app."""
         return record.get('trackedDownloadStatus') == 'warning'
 
+    def _is_within_retry_interval(self, media_id: int) -> bool:
+        """Return True if this media ID was actioned within the retry interval window."""
+        recorded = self._retry_state.get(media_id)
+        if self.retry_interval_minutes == 0 or recorded is None:
+            return False
+        cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=self.retry_interval_minutes)
+        if recorded <= cutoff:
+            del self._retry_state[media_id]
+        return recorded > cutoff
+
     def _is_tag_filtered_out(self, record: dict) -> bool:
         """Return True if this record should be skipped due to tag filtering rules."""
         record_tag_ids = set(self._get_record_tags(record))
@@ -122,6 +135,13 @@ class ArrClient(ABC):
             (self._exclude_tag_ids and record_tag_ids & self._exclude_tag_ids)
             or (self._include_tag_ids and not record_tag_ids & self._include_tag_ids)
         )
+
+    def _record_retry_interval(self, media_id: int, title: str) -> None:
+        """Record the current time as the last-actioned timestamp for this media ID."""
+        if self.retry_interval_minutes == 0:
+            return
+        self._retry_state[media_id] = datetime.datetime.now(datetime.UTC)
+        _LOGGER.debug(f'[{self.name}] Cooldown recorded for media ID {media_id}: {title}')
 
     def _remove_single(self, item: QueueItem, index: int, total: int) -> None:
         """DELETE a single queue item and optionally trigger a fresh search."""
@@ -143,9 +163,11 @@ class ArrClient(ABC):
                 _LOGGER.info(
                     f'[{self.name}] Removed ({item.action}, {item.category}, cascade): {item.title} ({index}/{total})'
                 )
+                self._record_retry_interval(item.media_id, item.title)
             else:
                 response.raise_for_status()
                 _LOGGER.info(f'[{self.name}] Removed ({item.action}, {item.category}): {item.title} ({index}/{total})')
+                self._record_retry_interval(item.media_id, item.title)
         except requests.RequestException as error:
             _LOGGER.error(f'[{self.name}] Failed to remove {item.title} (ID: {item.queue_id}): {error}')
             return
@@ -224,6 +246,7 @@ class ArrClient(ABC):
                 'ignored': 0,
                 'tag_filtered': 0,
                 'not_stalled': 0,
+                'retry_interval': 0,
             }
 
         all_records = self._fetch_all_queue()
@@ -233,6 +256,7 @@ class ArrClient(ABC):
             'ignored': 0,
             'tag_filtered': 0,
             'not_stalled': 0,
+            'retry_interval': 0,
         }
 
         for record in all_records:
@@ -261,13 +285,18 @@ class ArrClient(ABC):
                 skip_stats['ignored'] += 1
                 continue
 
+            media_id = self._get_media_id(record)
+            if self._is_within_retry_interval(media_id):
+                _LOGGER.debug(f'[{self.name}] Skipping stalled item (retry_interval, media ID {media_id}): {title}')
+                skip_stats['retry_interval'] += 1
+                continue
+
             if self._is_tag_filtered_out(record):
                 _LOGGER.debug(f'[{self.name}] Skipping stalled item (tag filter): {title}')
                 skip_stats['tag_filtered'] += 1
                 continue
 
             queue_id = record['id']
-            media_id = self._get_media_id(record)
             items.append(QueueItem(queue_id, media_id, title, action, category, messages))
 
             if self.batch_size > 0 and len(items) >= self.batch_size:
