@@ -2,19 +2,11 @@
 
 from typing import Any
 
+from killarr.classifier import StallCategory
+
 VALID_ACTIONS = ('ignore', 'remove', 'retry', 'blocklist')
 VALID_ARR_TYPES = ('radarr', 'sonarr', 'lidarr')
-STALL_CATEGORIES = (
-    'stalled',
-    'no_upgrade',
-    'manual_import',
-    'no_files',
-    'missing_items',
-    'tba_title',
-    'no_messages',
-    'dangerous_file',
-    'unknown',
-)
+STALL_CATEGORIES = tuple(category.value for category in StallCategory)
 
 SETTINGS_SCHEMA = {
     'interval': {
