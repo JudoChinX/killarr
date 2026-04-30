@@ -19,6 +19,7 @@ from killarr.main import _format_cycle_info
 from killarr.main import _get_setting
 from killarr.main import _run_removal_cycle
 from killarr.main import build_arr_clients
+from killarr.main import verify_arr_clients
 from tests.helpers import mock_http_response
 
 _FIXTURES_DIR = Path(__file__).parent.parent / 'fixtures'
@@ -501,3 +502,83 @@ def test_load_config_with_expanded_types(tmp_path: Any, monkeypatch: Any) -> Non
     result = load_config(str(cfg))
     assert result['global_settings']['interval'] == 900
     assert result['global_settings']['dry_run'] is True
+
+
+def _make_mock_connection_client(name: str, side_effect: Any) -> MagicMock:
+    """Build a mock arr client with a configurable check_connection side_effect."""
+    client = MagicMock()
+    client.name = name
+    client.check_connection.side_effect = side_effect
+    return client
+
+
+_verify_arr_clients_cases = {
+    'returns_all_when_all_connect': {
+        'side_effects': [[True], [True]],
+        'expected_count': 2,
+    },
+    'drops_client_that_never_connects': {
+        'side_effects': [[True], [False, False, False]],
+        'expected_count': 1,
+    },
+    'returns_empty_when_all_fail': {
+        'side_effects': [[False, False, False], [False, False, False]],
+        'expected_count': 0,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'side_effects, expected_count',
+    [(case['side_effects'], case['expected_count']) for case in _verify_arr_clients_cases.values()],
+    ids=list(_verify_arr_clients_cases.keys()),
+)
+def test_verify_arr_clients(side_effects: Any, expected_count: Any) -> None:
+    """Test that verify_arr_clients returns only clients that connected successfully."""
+    clients = [_make_mock_connection_client(f'Client{idx}', effects) for idx, effects in enumerate(side_effects)]
+    result = verify_arr_clients(clients)
+    assert len(result) == expected_count
+
+
+def test_verify_arr_clients_retries_then_succeeds(caplog: Any) -> None:
+    """Test that a client connecting on attempt 2 is included and logs 'attempt 2/3'."""
+    client = _make_mock_connection_client('ClientA', [False, True])
+    with caplog.at_level(logging.INFO):
+        result = verify_arr_clients([client])
+    assert len(result) == 1
+    assert 'attempt 2/3' in caplog.text
+
+
+def test_verify_arr_clients_logs_warning_on_retry(caplog: Any) -> None:
+    """Test that a WARNING containing 'Retrying in' is logged when a connection attempt fails."""
+    client = _make_mock_connection_client('ClientA', [False, True])
+    with caplog.at_level(logging.WARNING):
+        verify_arr_clients([client])
+    assert 'Retrying in' in caplog.text
+
+
+def test_verify_arr_clients_logs_error_on_exhaustion(caplog: Any) -> None:
+    """Test that an ERROR containing 'Could not connect after' is logged when all attempts fail."""
+    client = _make_mock_connection_client('ClientA', [False, False, False])
+    with caplog.at_level(logging.ERROR):
+        verify_arr_clients([client])
+    assert 'Could not connect after' in caplog.text
+
+
+def test_run_exits_when_all_verification_fails() -> None:
+    """Test that run() exits with code 1 when verify_arr_clients returns an empty list."""
+    config = {
+        'global_settings': {},
+        'instances': {
+            'radarr': [{'name': 'R', 'url': 'http://r', 'api_key': 'k', 'weight': 1.0}],
+            'sonarr': [],
+            'lidarr': [],
+        },
+    }
+    with patch('killarr.main._load_config_from_paths', return_value=config):
+        with patch('killarr.main.verify_arr_clients', return_value=[]):
+            with pytest.raises(SystemExit) as exc_info:
+                from killarr.main import run
+
+                run()
+    assert exc_info.value.code == 1
