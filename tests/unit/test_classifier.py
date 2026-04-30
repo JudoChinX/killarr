@@ -52,7 +52,7 @@ _classify_cases = {
     'empty_messages': ([], 'no_messages'),
     'multiple_messages_first_match_wins': (
         ['Not an upgrade for existing movie file(s)', 'Manual Import required'],
-        'no_upgrade',
+        'manual_import',
     ),
 }
 
