@@ -1,5 +1,6 @@
 """Configuration loader and validator for Killarr."""
 
+import datetime
 import logging
 import os
 import re
@@ -9,6 +10,7 @@ import yaml
 
 from killarr.validators import SETTINGS_SCHEMA
 from killarr.validators import VALID_ARR_TYPES
+from killarr.validators import parse_hhmm
 from killarr.validators import validate_global_settings
 from killarr.validators import validate_stall_action_settings
 
@@ -82,6 +84,19 @@ def _parse_instance(name: str, config: dict) -> tuple[str, dict] | None:
         instance.update(killarr_overrides)
         result = (inst_type, instance)
     return result
+
+
+def parse_active_hours(value: str) -> tuple[datetime.time, datetime.time]:
+    """Parse a validated HH:MM-HH:MM string into a start and end time pair.
+
+    Args:
+        value: A validated time window string in HH:MM-HH:MM format.
+
+    Returns:
+        A tuple of (start, end) as datetime.time objects.
+    """
+    start_str, end_str = value.split('-')
+    return parse_hhmm(start_str), parse_hhmm(end_str)
 
 
 def get_setting_default(setting: str) -> Any:

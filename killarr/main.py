@@ -20,6 +20,7 @@ from killarr.clients.arr import SonarrClient
 from killarr.config_parser import get_setting_default
 from killarr.config_parser import load_config
 from killarr.config_parser import load_config_from_env
+from killarr.config_parser import parse_active_hours
 from killarr.validators import SETTINGS_SCHEMA
 from killarr.validators import STALL_CATEGORIES
 
@@ -69,6 +70,13 @@ def _get_setting(settings: dict, key: str) -> Any:
     return settings.get(key, get_setting_default(key))
 
 
+def _is_within_active_hours(start: datetime.time, end: datetime.time, now: datetime.time) -> bool:
+    """Return True if now falls within the configured active hours window."""
+    if start <= end:
+        return start <= now < end
+    return now >= start or now < end
+
+
 def _load_config_from_paths(config_paths: list[str]) -> dict | None:
     """Attempt to load configuration from a list of possible file paths."""
     config = None
@@ -104,6 +112,8 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
     stagger = _get_setting(settings, 'stagger_interval_seconds')
     dry_run = _get_setting(settings, 'dry_run')
     dry_run_str = ' (DRY RUN ENABLED)' if dry_run else ''
+    active_hours = _get_setting(settings, 'active_hours')
+    active_hours_str = active_hours if active_hours else 'All hours'
     stall_actions = {
         category: settings.get(category, settings.get('stalled', 'ignore')) for category in STALL_CATEGORIES
     }
@@ -115,6 +125,7 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
         f'Run Interval: {_get_setting(settings, "interval")}s | '
         f'Batch: {batch_str} | '
         f'Stagger: {stagger}s | '
+        f'Active Hours: {active_hours_str} | '
         f'Handling: {action_str}'
     )
 
@@ -133,6 +144,16 @@ def _run_removal_cycle(active_clients: list[Any], _settings: dict) -> None:
 
         _LOGGER.info(_format_cycle_info(client.name, len(items), skip_stats, client.stagger_seconds))
         client.remove_stalled(items)
+
+
+def _seconds_until_window_open(start: datetime.time, now: datetime.time, today: datetime.date | None = None) -> int:
+    """Return the number of seconds until the active hours window next opens."""
+    date = today if today is not None else datetime.date.today()
+    start_dt = datetime.datetime.combine(date, start)
+    now_dt = datetime.datetime.combine(date, now)
+    if start_dt <= now_dt:
+        start_dt += datetime.timedelta(days=1)
+    return int((start_dt - now_dt).total_seconds())
 
 
 def build_arr_clients(
@@ -238,8 +259,18 @@ def run() -> None:
     _log_killarr_start(active_clients, settings)
 
     run_interval_seconds = _get_setting(settings, 'interval')
+    active_hours = _get_setting(settings, 'active_hours')
+    parsed_window = parse_active_hours(active_hours) if active_hours else None
 
     while True:
+        if parsed_window:
+            start_time, end_time = parsed_window
+            now = datetime.datetime.now().time()
+            if not _is_within_active_hours(start_time, end_time, now):
+                secs = _seconds_until_window_open(start_time, now)
+                _LOGGER.info(f'Outside active hours ({active_hours}). Sleeping {secs}s until window opens.')
+                time.sleep(secs)
+                continue
         _run_removal_cycle(active_clients, settings)
         _LOGGER.info(f'--- Cycle complete. Sleeping for {run_interval_seconds}s. ---')
         time.sleep(run_interval_seconds)

@@ -1,5 +1,7 @@
 """Validation logic for Killarr configuration."""
 
+import datetime
+import re
 from typing import Any
 
 from killarr.classifier import StallCategory
@@ -8,37 +10,21 @@ VALID_ACTIONS = ('ignore', 'remove', 'retry', 'blocklist')
 VALID_ARR_TYPES = ('radarr', 'sonarr', 'lidarr')
 STALL_CATEGORIES = tuple(category.value for category in StallCategory)
 
-SETTINGS_SCHEMA = {
-    'interval': {
-        'default': 3600,
-        'type': int,
-        'min_value': 1,
-    },
-    'stagger_interval_seconds': {
-        'default': 5,
-        'type': int,
-        'min_value': 0,
-    },
-    'batch_size': {
-        'default': 10,
-        'type': int,
-        'allow_special_values': True,
-    },
-    'dry_run': {
-        'default': False,
-        'type': bool,
-    },
-    'include_tags': {
-        'default': [],
-        'type': list,
-        'element_type': str,
-    },
-    'exclude_tags': {
-        'default': [],
-        'type': list,
-        'element_type': str,
-    },
-}
+
+def _validate_active_hours(value: str) -> None:
+    """Validate the active_hours setting format and component ranges."""
+    if not value:
+        return
+    if not re.match(r'^\d{2}:\d{2}-\d{2}:\d{2}$', value):
+        raise ValueError(f"'killarr.active_hours' must be in HH:MM-HH:MM format (e.g. '22:00-06:00'), got '{value}'.")
+    start_str, end_str = value.split('-')
+    for part, label in ((start_str, 'start'), (end_str, 'end')):
+        try:
+            parse_hhmm(part)
+        except ValueError as exc:
+            raise ValueError(f"'killarr.active_hours' {label} time '{part}' is not a valid 24-hour time.") from exc
+    if start_str == end_str:
+        raise ValueError("'killarr.active_hours' start and end times must differ.")
 
 
 def _validate_setting(
@@ -80,6 +66,56 @@ def _validate_setting(
         raise ValueError(f"'{prefix}.{setting}' must be one of: {valid_choices}.")
 
 
+SETTINGS_SCHEMA = {
+    'interval': {
+        'default': 3600,
+        'type': int,
+        'min_value': 1,
+    },
+    'stagger_interval_seconds': {
+        'default': 5,
+        'type': int,
+        'min_value': 0,
+    },
+    'batch_size': {
+        'default': 10,
+        'type': int,
+        'allow_special_values': True,
+    },
+    'dry_run': {
+        'default': False,
+        'type': bool,
+    },
+    'include_tags': {
+        'default': [],
+        'type': list,
+        'element_type': str,
+    },
+    'exclude_tags': {
+        'default': [],
+        'type': list,
+        'element_type': str,
+    },
+    'active_hours': {
+        'default': '',
+        'type': str,
+        'validator': _validate_active_hours,
+    },
+}
+
+
+def parse_hhmm(token: str) -> datetime.time:
+    """Parse an HH:MM token into a datetime.time object.
+
+    Args:
+        token: An HH:MM string.
+
+    Returns:
+        A datetime.time object.
+    """
+    return datetime.time.fromisoformat(token)
+
+
 def validate_global_settings(settings: dict, schema: dict) -> None:
     """Apply defaults and validate all settings against their schema.
 
@@ -102,6 +138,9 @@ def validate_global_settings(settings: dict, schema: dict) -> None:
             min_value=definition.get('min_value'),
             element_type=definition.get('element_type'),
         )
+        validator = definition.get('validator')
+        if validator is not None:
+            validator(settings[setting])
 
 
 def validate_stall_action_settings(settings: dict) -> None:

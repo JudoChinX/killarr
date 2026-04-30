@@ -1,5 +1,7 @@
 """Tests for killarr main module."""
 
+# pylint: disable=protected-access
+import datetime
 import json
 import logging
 import textwrap
@@ -17,7 +19,9 @@ from killarr.config_parser import load_config
 from killarr.main import _calculate_eta
 from killarr.main import _format_cycle_info
 from killarr.main import _get_setting
+from killarr.main import _is_within_active_hours
 from killarr.main import _run_removal_cycle
+from killarr.main import _seconds_until_window_open
 from killarr.main import build_arr_clients
 from killarr.main import verify_arr_clients
 from tests.helpers import mock_http_response
@@ -119,6 +123,191 @@ _get_setting_cases = {
 def test_get_setting(settings: Any, key: Any, expected: Any) -> None:
     """Test that _get_setting returns the dict value or falls back to schema default."""
     assert _get_setting(settings, key) == expected
+
+
+_is_within_active_hours_cases = {
+    'inside_same_day': {
+        'start': datetime.time(9, 0),
+        'end': datetime.time(17, 0),
+        'now': datetime.time(12, 0),
+        'expected': True,
+    },
+    'outside_same_day_before': {
+        'start': datetime.time(9, 0),
+        'end': datetime.time(17, 0),
+        'now': datetime.time(8, 0),
+        'expected': False,
+    },
+    'outside_same_day_after': {
+        'start': datetime.time(9, 0),
+        'end': datetime.time(17, 0),
+        'now': datetime.time(18, 0),
+        'expected': False,
+    },
+    'at_start_boundary': {
+        'start': datetime.time(9, 0),
+        'end': datetime.time(17, 0),
+        'now': datetime.time(9, 0),
+        'expected': True,
+    },
+    'at_end_boundary_excluded': {
+        'start': datetime.time(9, 0),
+        'end': datetime.time(17, 0),
+        'now': datetime.time(17, 0),
+        'expected': False,
+    },
+    'inside_midnight_crossing_before_midnight': {
+        'start': datetime.time(22, 0),
+        'end': datetime.time(6, 0),
+        'now': datetime.time(23, 0),
+        'expected': True,
+    },
+    'inside_midnight_crossing_after_midnight': {
+        'start': datetime.time(22, 0),
+        'end': datetime.time(6, 0),
+        'now': datetime.time(3, 0),
+        'expected': True,
+    },
+    'outside_midnight_crossing_midday': {
+        'start': datetime.time(22, 0),
+        'end': datetime.time(6, 0),
+        'now': datetime.time(12, 0),
+        'expected': False,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'start, end, now, expected',
+    [(case['start'], case['end'], case['now'], case['expected']) for case in _is_within_active_hours_cases.values()],
+    ids=list(_is_within_active_hours_cases.keys()),
+)
+def test_is_within_active_hours(start: Any, end: Any, now: Any, expected: Any) -> None:
+    """Test that _is_within_active_hours correctly identifies whether now is inside the window."""
+    assert _is_within_active_hours(start, end, now) == expected
+
+
+_seconds_until_window_open_cases = {
+    'window_opens_later_today': {
+        'start': datetime.time(22, 0),
+        'now': datetime.time(20, 0),
+        'expected_seconds': 7200,
+    },
+    'window_already_passed_rolls_to_tomorrow': {
+        'start': datetime.time(22, 0),
+        'now': datetime.time(23, 0),
+        'expected_seconds': 82800,
+    },
+    'window_opens_at_midnight': {
+        'start': datetime.time(0, 0),
+        'now': datetime.time(12, 0),
+        'expected_seconds': 43200,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'start, now, expected_seconds',
+    [(case['start'], case['now'], case['expected_seconds']) for case in _seconds_until_window_open_cases.values()],
+    ids=list(_seconds_until_window_open_cases.keys()),
+)
+def test_seconds_until_window_open(start: Any, now: Any, expected_seconds: Any) -> None:
+    """Test that _seconds_until_window_open returns the correct number of seconds until the window opens."""
+    assert _seconds_until_window_open(start, now, today=datetime.date(2026, 4, 23)) == expected_seconds
+
+
+def _make_run_config(active_hours: str = '') -> dict:
+    """Build a minimal run config dict with the given active_hours setting."""
+    return {
+        'global_settings': {'interval': 10, 'active_hours': active_hours},
+        'instances': {
+            'radarr': [{'name': 'R', 'url': 'http://r', 'api_key': 'k', 'weight': 1.0}],
+            'sonarr': [],
+            'lidarr': [],
+        },
+    }
+
+
+def test_run_loop_skips_cycle_outside_active_hours(caplog: Any) -> None:
+    """Test that run() skips the removal cycle and sleeps when outside active hours."""
+    from killarr.main import run
+
+    queue_data = _load_fixture('radarr', 'queue.json')
+    cycle_calls: list[int] = []
+
+    def fake_sleep(_secs: float) -> None:
+        raise KeyboardInterrupt
+
+    with patch('killarr.main._load_config_from_paths', return_value=_make_run_config('22:00-06:00')):
+        with patch('requests.Session.get', return_value=mock_http_response(queue_data)):
+            with patch('killarr.main._run_removal_cycle', side_effect=lambda *a: cycle_calls.append(1)):
+                with patch('time.sleep', side_effect=fake_sleep):
+                    with caplog.at_level(logging.INFO):
+                        with pytest.raises(KeyboardInterrupt):
+                            run()
+
+    assert not cycle_calls
+    assert 'Outside active hours' in caplog.text
+
+
+def test_run_loop_runs_cycle_inside_active_hours() -> None:
+    """Test that run() executes the removal cycle when inside active hours."""
+    from killarr.main import run
+
+    queue_data = _load_fixture('radarr', 'queue.json')
+    cycle_calls: list[int] = []
+
+    def fake_sleep(_secs: float) -> None:
+        raise KeyboardInterrupt
+
+    with patch('killarr.main._load_config_from_paths', return_value=_make_run_config('09:00-17:00')):
+        with patch('requests.Session.get', return_value=mock_http_response(queue_data)):
+            with patch('killarr.main._run_removal_cycle', side_effect=lambda *a: cycle_calls.append(1)):
+                with patch('time.sleep', side_effect=fake_sleep):
+                    with pytest.raises(KeyboardInterrupt):
+                        run()
+
+    assert len(cycle_calls) == 1
+
+
+def test_run_loop_no_active_hours_runs_cycle(caplog: Any) -> None:
+    """Test that run() executes the removal cycle when active_hours is not configured."""
+    from killarr.main import run
+
+    queue_data = _load_fixture('radarr', 'queue.json')
+    cycle_calls: list[int] = []
+
+    def fake_sleep(_secs: float) -> None:
+        raise KeyboardInterrupt
+
+    with patch('killarr.main._load_config_from_paths', return_value=_make_run_config('')):
+        with patch('requests.Session.get', return_value=mock_http_response(queue_data)):
+            with patch('killarr.main._run_removal_cycle', side_effect=lambda *a: cycle_calls.append(1)):
+                with patch('time.sleep', side_effect=fake_sleep):
+                    with caplog.at_level(logging.INFO):
+                        with pytest.raises(KeyboardInterrupt):
+                            run()
+
+    assert len(cycle_calls) == 1
+    assert 'Outside active hours' not in caplog.text
+
+
+def test_log_killarr_start_shows_active_hours(caplog: Any) -> None:
+    """Test that _log_killarr_start logs the configured active_hours window."""
+    from killarr.main import _log_killarr_start
+
+    with caplog.at_level(logging.INFO):
+        _log_killarr_start([MagicMock()], {'active_hours': '22:00-06:00'})
+    assert 'Active Hours: 22:00-06:00' in caplog.text
+
+
+def test_log_killarr_start_shows_all_hours_when_unset(caplog: Any) -> None:
+    """Test that _log_killarr_start logs 'All hours' when active_hours is not set."""
+    from killarr.main import _log_killarr_start
+
+    with caplog.at_level(logging.INFO):
+        _log_killarr_start([MagicMock()], {})
+    assert 'Active Hours: All hours' in caplog.text
 
 
 def _make_instances_config(

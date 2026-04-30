@@ -1,5 +1,6 @@
 """Tests for killarr config_parser."""
 
+import datetime
 import logging
 import re
 import textwrap
@@ -11,6 +12,7 @@ from killarr.config_parser import _expand_env_vars
 from killarr.config_parser import get_setting_default
 from killarr.config_parser import load_config
 from killarr.config_parser import load_config_from_env
+from killarr.config_parser import parse_active_hours
 from killarr.config_parser import parse_config
 from tests.helpers import assert_config_result
 
@@ -44,6 +46,30 @@ MINIMAL_INSTANCE = {
         'enabled': True,
     }
 }
+
+
+# --- parse_active_hours ---
+
+_parse_active_hours_cases = {
+    'parses_same_day': {
+        'value': '09:00-17:00',
+        'expected': (datetime.time(9, 0), datetime.time(17, 0)),
+    },
+    'parses_midnight_crossing': {
+        'value': '22:00-06:00',
+        'expected': (datetime.time(22, 0), datetime.time(6, 0)),
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'value, expected',
+    [(case['value'], case['expected']) for case in _parse_active_hours_cases.values()],
+    ids=list(_parse_active_hours_cases.keys()),
+)
+def test_parse_active_hours(value: str, expected: tuple) -> None:
+    """Test that parse_active_hours returns the correct (start, end) time pair."""
+    assert parse_active_hours(value) == expected
 
 
 # --- Schema defaults ---
