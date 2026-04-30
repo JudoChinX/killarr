@@ -198,6 +198,20 @@ class ArrClient(ABC):
         except requests.RequestException as error:
             _LOGGER.warning(f'[{self.name}] Failed to trigger search for {title} (ID: {media_id}): {error}')
 
+    def check_connection(self) -> bool:
+        """Return True if the instance tag endpoint responds successfully.
+
+        Returns:
+            True if the HTTP request succeeds, False on any network error.
+        """
+        url = f'{self.url}{self.ENDPOINT_TAG}'
+        try:
+            response = self.session.get(url, timeout=15)
+            response.raise_for_status()
+            return True
+        except requests.RequestException:
+            return False
+
     def get_stalled_items(self) -> tuple[list[QueueItem], dict[str, int]]:
         """Fetch the queue, classify each stalled item, and return actionable items and skip stats.
 

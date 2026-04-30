@@ -43,6 +43,8 @@ _CLIENT_MAP: dict[str, type[ArrClient]] = {
     'radarr': RadarrClient,
     'sonarr': SonarrClient,
 }
+_MAX_CONNECTION_ATTEMPTS: int = 3
+_RETRY_DELAY_SECONDS: int = 10
 
 
 def _calculate_eta(item_count: int, stagger_seconds: int) -> str:
@@ -167,6 +169,39 @@ def build_arr_clients(
     return clients
 
 
+def verify_arr_clients(clients: list[ArrClient]) -> list[ArrClient]:
+    """Verify connectivity to each client, retrying before dropping unreachable ones.
+
+    Args:
+        clients: List of instantiated *arr clients to verify.
+
+    Returns:
+        Filtered list containing only clients that responded within the retry limit.
+    """
+    verified: list[ArrClient] = []
+    for client in clients:
+        connected = False
+        for attempt in range(1, _MAX_CONNECTION_ATTEMPTS + 1):
+            if client.check_connection():
+                if attempt > 1:
+                    _LOGGER.info(f'[{client.name}] Connected on attempt {attempt}/{_MAX_CONNECTION_ATTEMPTS}.')
+                connected = True
+                break
+            if attempt < _MAX_CONNECTION_ATTEMPTS:
+                _LOGGER.warning(
+                    f'[{client.name}] Connection attempt {attempt}/{_MAX_CONNECTION_ATTEMPTS} failed. '
+                    f'Retrying in {_RETRY_DELAY_SECONDS}s...'
+                )
+                time.sleep(_RETRY_DELAY_SECONDS)
+            else:
+                _LOGGER.error(
+                    f'[{client.name}] Could not connect after {_MAX_CONNECTION_ATTEMPTS} attempts. Skipping instance.'
+                )
+        if connected:
+            verified.append(client)
+    return verified
+
+
 def run() -> None:
     """Load configuration and start the removal loop."""
     config_source = os.environ.get('KILLARR_CONFIG_SOURCE', 'file').lower()
@@ -193,6 +228,11 @@ def run() -> None:
 
     if not active_clients:
         _LOGGER.warning("No *arr instances are configured. Add at least one entry under 'instances' to begin.")
+        sys.exit(1)
+
+    active_clients = verify_arr_clients(active_clients)
+    if not active_clients:
+        _LOGGER.error('All configured *arr instances failed to connect. Check network connectivity and instance URLs.')
         sys.exit(1)
 
     _log_killarr_start(active_clients, settings)

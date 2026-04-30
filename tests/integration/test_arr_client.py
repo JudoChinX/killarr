@@ -518,6 +518,38 @@ def test_remove_stalled_logs_stall_details_at_debug(caplog: Any) -> None:
     assert 'Deep detail 2' in caplog.text
 
 
+def test_check_connection_returns_true_on_200() -> None:
+    """Test that check_connection returns True when the tag endpoint responds with 200."""
+    client = ClientBuilder().radarr().build()
+    client.session.get = MagicMock(return_value=mock_http_response([]))
+    assert client.check_connection() is True
+
+
+def test_check_connection_returns_false_on_connection_error() -> None:
+    """Test that check_connection returns False on a network connection error."""
+    client = ClientBuilder().radarr().build()
+    client.session.get = MagicMock(side_effect=requests.ConnectionError('down'))
+    assert client.check_connection() is False
+
+
+def test_check_connection_returns_false_on_http_error() -> None:
+    """Test that check_connection returns False when raise_for_status raises HTTPError."""
+    client = ClientBuilder().radarr().build()
+    mock_response = MagicMock()
+    mock_response.raise_for_status.side_effect = requests.HTTPError('500')
+    client.session.get = MagicMock(return_value=mock_response)
+    assert client.check_connection() is False
+
+
+def test_check_connection_lidarr_uses_v1_endpoint() -> None:
+    """Test that LidarrClient.check_connection() calls the /api/v1/tag endpoint."""
+    client = ClientBuilder().lidarr().build()
+    client.session.get = MagicMock(return_value=mock_http_response([]))
+    client.check_connection()
+    call_url = client.session.get.call_args.args[0]
+    assert '/api/v1/tag' in call_url
+
+
 _subclass_attr_cases = {
     'radarr_command_name': {'arr_type': 'radarr', 'attr': '_command_name', 'expected': 'MoviesSearch'},
     'radarr_id_field': {'arr_type': 'radarr', 'attr': '_id_field', 'expected': 'movieIds'},
