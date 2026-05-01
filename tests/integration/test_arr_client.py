@@ -2,6 +2,7 @@
 
 # pylint: disable=protected-access
 
+import datetime
 import logging
 from typing import Any
 from unittest.mock import MagicMock
@@ -16,6 +17,7 @@ from tests.builders import ClientBuilder
 from tests.builders import LidarrQueueBuilder
 from tests.builders import RadarrQueueBuilder
 from tests.builders import SonarrQueueBuilder
+from tests.conftest import FIXED_NOW
 from tests.helpers import mock_http_response
 from tests.helpers import mock_queue_response
 from tests.helpers import mock_tag_response
@@ -658,3 +660,165 @@ def test_radarr_get_record_title_fallback() -> None:
     """Test that _get_record_title returns a fallback string when title is absent."""
     client = ClientBuilder().radarr().build()
     assert 'Queue item' in client._get_record_title({'id': 5})
+
+
+_is_within_retry_interval_cases = {
+    'returns_false_when_disabled': {
+        'retry_minutes': 0,
+        'state': {42: FIXED_NOW},
+        'media_id': 42,
+        'expected': False,
+    },
+    'returns_true_within_window': {
+        'retry_minutes': 120,
+        'state': {42: FIXED_NOW - datetime.timedelta(minutes=60)},
+        'media_id': 42,
+        'expected': True,
+    },
+    'returns_false_after_expiry': {
+        'retry_minutes': 120,
+        'state': {42: FIXED_NOW - datetime.timedelta(minutes=180)},
+        'media_id': 42,
+        'expected': False,
+    },
+    'returns_false_for_unknown_id': {
+        'retry_minutes': 120,
+        'state': {},
+        'media_id': 99,
+        'expected': False,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'retry_minutes, state, media_id, expected',
+    [
+        (case['retry_minutes'], case['state'], case['media_id'], case['expected'])
+        for case in _is_within_retry_interval_cases.values()
+    ],
+    ids=list(_is_within_retry_interval_cases.keys()),
+)
+def test_is_within_retry_interval(retry_minutes: Any, state: Any, media_id: Any, expected: Any) -> None:
+    """Test _is_within_retry_interval returns the correct result for each scenario."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=retry_minutes).build()
+    client._retry_state = dict(state)
+    assert client._is_within_retry_interval(media_id) is expected
+
+
+def test_is_within_retry_interval_cleans_up_expired_entry() -> None:
+    """Test that _is_within_retry_interval removes an expired entry from _retry_state."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120).build()
+    client._retry_state = {42: FIXED_NOW - datetime.timedelta(minutes=180)}
+    client._is_within_retry_interval(42)
+    assert 42 not in client._retry_state
+
+
+def test_record_retry_interval_stores_timestamp() -> None:
+    """Test that _record_retry_interval stores the current timestamp under the given media ID."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120).build()
+    client._record_retry_interval(42, 'Test.Movie.mkv')
+    assert client._retry_state[42] == FIXED_NOW
+
+
+def test_record_retry_interval_noop_when_disabled() -> None:
+    """Test that _record_retry_interval does nothing when retry_interval_minutes is 0."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=0).build()
+    client._record_retry_interval(42, 'Test.Movie.mkv')
+    assert client._retry_state == {}
+
+
+def test_record_retry_interval_overwrites_existing_entry() -> None:
+    """Test that a second call for the same media ID updates the stored timestamp."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120).build()
+    client._retry_state = {42: FIXED_NOW - datetime.timedelta(minutes=60)}
+    client._record_retry_interval(42, 'Test.Movie.mkv')
+    assert client._retry_state[42] == FIXED_NOW
+    assert len(client._retry_state) == 1
+
+
+def test_get_stalled_items_skips_item_within_retry_interval() -> None:
+    """Test that an item within the retry interval window is not returned."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120, no_messages='remove').build()
+    client._retry_state = {10: FIXED_NOW}
+    records = [RadarrQueueBuilder().warning().with_id(1).with_movie_id(10).build()]
+    client.session.get = MagicMock(return_value=mock_queue_response(records))
+    items, _stats = client.get_stalled_items()
+    assert not items
+
+
+def test_get_stalled_items_does_not_skip_expired_retry_interval() -> None:
+    """Test that an item with an expired retry interval entry is still returned."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120, no_messages='remove').build()
+    client._retry_state = {10: FIXED_NOW - datetime.timedelta(minutes=180)}
+    records = [RadarrQueueBuilder().warning().with_id(1).with_movie_id(10).build()]
+    client.session.get = MagicMock(return_value=mock_queue_response(records))
+    items, _stats = client.get_stalled_items()
+    assert len(items) == 1
+
+
+def test_get_stalled_items_retry_interval_disabled_never_skips() -> None:
+    """Test that retry_interval_minutes=0 never skips items even if state is populated."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=0, no_messages='remove').build()
+    client._retry_state = {10: FIXED_NOW}
+    records = [RadarrQueueBuilder().warning().with_id(1).with_movie_id(10).build()]
+    client.session.get = MagicMock(return_value=mock_queue_response(records))
+    items, _stats = client.get_stalled_items()
+    assert len(items) == 1
+
+
+def test_get_stalled_items_counts_retry_interval_skips() -> None:
+    """Test that skip_stats['retry_interval'] counts items skipped due to retry interval."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120, no_messages='remove').build()
+    client._retry_state = {10: FIXED_NOW}
+    records = [
+        RadarrQueueBuilder().warning().with_id(1).with_movie_id(10).build(),
+        RadarrQueueBuilder().warning().with_id(2).with_movie_id(20).build(),
+    ]
+    client.session.get = MagicMock(return_value=mock_queue_response(records))
+    items, skip_stats = client.get_stalled_items()
+    assert len(items) == 1
+    assert skip_stats['retry_interval'] == 1
+
+
+def test_get_stalled_items_retry_interval_logs_debug(caplog: Any) -> None:
+    """Test that a DEBUG log is emitted when an item is skipped due to retry interval."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120, no_messages='remove').build()
+    client._retry_state = {10: FIXED_NOW}
+    records = [RadarrQueueBuilder().warning().with_id(1).with_movie_id(10).with_title('Stalled.Movie.mkv').build()]
+    client.session.get = MagicMock(return_value=mock_queue_response(records))
+    with caplog.at_level(logging.DEBUG):
+        client.get_stalled_items()
+    assert 'retry_interval' in caplog.text
+    assert 'Stalled.Movie.mkv' in caplog.text
+
+
+def test_remove_single_records_retry_interval_on_success() -> None:
+    """Test that a successful DELETE records the media ID in _retry_state."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120).build()
+    client.session.delete = MagicMock(return_value=mock_http_response())
+    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', 'remove', 'stalled', []), 1, 1)
+    assert 10 in client._retry_state
+
+
+def test_remove_single_records_retry_interval_on_404() -> None:
+    """Test that a 404 (cascade) DELETE still records the media ID in _retry_state."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120).build()
+    client.session.delete = MagicMock(return_value=mock_http_response(status_code=404))
+    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', 'remove', 'stalled', []), 1, 1)
+    assert 10 in client._retry_state
+
+
+def test_remove_single_does_not_record_retry_interval_on_failure() -> None:
+    """Test that a failed DELETE does not record anything in _retry_state."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120).build()
+    client.session.delete = MagicMock(side_effect=requests.exceptions.ConnectionError('down'))
+    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', 'remove', 'stalled', []), 1, 1)
+    assert client._retry_state == {}
+
+
+def test_remove_single_dry_run_does_not_record_retry_interval() -> None:
+    """Test that dry_run=True does not record anything in _retry_state."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120, dry_run=True).build()
+    client.session.delete = MagicMock()
+    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', 'remove', 'stalled', []), 1, 1)
+    assert client._retry_state == {}

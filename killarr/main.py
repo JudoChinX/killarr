@@ -60,7 +60,7 @@ def _calculate_eta(item_count: int, stagger_seconds: int) -> str:
 def _format_cycle_info(client_name: str, item_count: int, skip_stats: dict[str, int], stagger_seconds: int) -> str:
     """Format cycle processing info message with counts and ETA."""
     total_eval = skip_stats['total_evaluated']
-    skipped = skip_stats['ignored'] + skip_stats['tag_filtered']
+    skipped = skip_stats['ignored'] + skip_stats['tag_filtered'] + skip_stats.get('retry_interval', 0)
     eta_str = _calculate_eta(item_count, stagger_seconds)
     return f'[{client_name}] Found {item_count} items to remove (Evaluated: {total_eval}, Skipped: {skipped}{eta_str}).'
 
@@ -114,6 +114,8 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
     dry_run_str = ' (DRY RUN ENABLED)' if dry_run else ''
     active_hours = _get_setting(settings, 'active_hours')
     active_hours_str = active_hours if active_hours else 'All hours'
+    retry_minutes = _get_setting(settings, 'retry_interval_minutes')
+    retry_str = f'{retry_minutes}m' if retry_minutes > 0 else 'off'
     stall_actions = {
         category: settings.get(category, settings.get('stalled', 'ignore')) for category in STALL_CATEGORIES
     }
@@ -126,6 +128,7 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
         f'Batch: {batch_str} | '
         f'Stagger: {stagger}s | '
         f'Active Hours: {active_hours_str} | '
+        f'Retry Interval: {retry_str} | '
         f'Handling: {action_str}'
     )
 
