@@ -84,3 +84,43 @@ def test_validate_global_settings_active_hours(settings: Any, expect_error: bool
             validate_global_settings(dict(settings), SETTINGS_SCHEMA)
     else:
         validate_global_settings(dict(settings), SETTINGS_SCHEMA)
+
+
+_validate_interleave_instances_cases = {
+    'defaults_to_false': {
+        'settings': {},
+        'expected_value': False,
+        'expect_error': False,
+    },
+    'accepts_true': {
+        'settings': {'interleave_instances': True},
+        'expected_value': True,
+        'expect_error': False,
+    },
+    'rejects_non_bool': {
+        'settings': {'interleave_instances': 'yes'},
+        'expected_value': None,
+        'expect_error': True,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'settings, expected_value, expect_error',
+    [
+        (case['settings'], case['expected_value'], case['expect_error'])
+        for case in _validate_interleave_instances_cases.values()
+    ],
+    ids=list(_validate_interleave_instances_cases.keys()),
+)
+def test_validate_interleave_instances(settings: Any, expected_value: Any, expect_error: bool) -> None:
+    """Test that interleave_instances defaults to False and rejects non-bool values."""
+    from killarr.validators import SETTINGS_SCHEMA
+
+    s = dict(settings)
+    if expect_error:
+        with pytest.raises(ValueError, match='interleave_instances'):
+            validate_global_settings(s, SETTINGS_SCHEMA)
+    else:
+        validate_global_settings(s, SETTINGS_SCHEMA)
+        assert s['interleave_instances'] == expected_value

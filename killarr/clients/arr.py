@@ -2,7 +2,6 @@
 
 import datetime
 import logging
-import time
 from abc import ABC
 from abc import abstractmethod
 from typing import NamedTuple
@@ -48,7 +47,7 @@ class ArrClient(ABC):
             url: Base URL of the *arr service API.
             api_key: API key for authentication.
             settings: Merged configuration settings dict.
-            weight: Unused by killarr but kept for interface parity with rangarr.
+            weight: Priority multiplier for weighted round-robin slot allocation. Higher values receive proportionally more removal slots per cycle.
         """
         self.name = name
         self.url = url.rstrip('/')
@@ -304,18 +303,15 @@ class ArrClient(ABC):
 
         return items, skip_stats
 
-    def remove_stalled(self, items: list[QueueItem]) -> None:
-        """Remove each stalled item from the queue, staggering between calls.
+    def execute_removal(self, item: QueueItem, index: int, total: int) -> None:
+        """Remove a single queue item.
 
         Args:
-            items: List of QueueItem named tuples.
+            item: The QueueItem to remove.
+            index: 1-based position in the global removal queue.
+            total: Total items in the global removal queue.
         """
-        total = len(items)
-        for index, item in enumerate(items, start=1):
-            self._remove_single(item, index, total)
-            if self.stagger_seconds > 0 and index < total:
-                _LOGGER.debug(f'[{self.name}] Staggering next removal by {self.stagger_seconds}s.')
-                time.sleep(self.stagger_seconds)
+        self._remove_single(item, index, total)
 
 
 class LidarrClient(ArrClient):

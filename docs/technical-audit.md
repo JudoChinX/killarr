@@ -83,7 +83,7 @@ Each cycle:
 
 **Key Functions:**
 - `run()`: Loads configuration (file or env), builds clients, starts the infinite loop.
-- `_run_removal_cycle()`: Calls `get_stalled_items()` on each client and `remove_stalled()` for any found.
+- `_run_removal_cycle()`: Calls `get_stalled_items()` on each client and `execute_removal()` for any found.
 - `build_arr_clients()`: Instantiates \*arr clients from the parsed config, merging global settings with per-instance overrides.
 - `_load_config_from_paths()`: Tries each config file path in order, returning the first successfully loaded config.
 - `_get_setting()`: Helper to read a setting with fallback to the schema default.
@@ -127,8 +127,7 @@ Each cycle:
 - `get_stalled_items()`: Fetches the full queue, filters for stalled items, classifies them via `classifier.py`, and applies tag filtering and batch limits. Returns a tuple of `(actionable_items, skip_stats)` where `skip_stats` is a dictionary of evaluation and skip counts.
 - `_fetch_all_queue()`: Paginates through the \*arr queue endpoint until all records are retrieved.
 - `_is_stalled()`: Returns `True` if `trackedDownloadStatus == "warning"`.
-- `remove_stalled()`: Iterates over stalled items, calling `_remove_single()` with optional stagger sleep between items.
-- `_remove_single()`: DELETEs a single queue item, then optionally calls `_trigger_search()`.
+- `execute_removal()`: Removes a single queue item by delegating to `_remove_single()`.
 - `_trigger_search()`: POSTs a search command to the \*arr command endpoint.
 - `_resolve_tag_ids()`: At startup, fetches all tags from the instance and resolves configured tag names to IDs.
 
