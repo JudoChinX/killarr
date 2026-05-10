@@ -82,6 +82,10 @@ SETTINGS_SCHEMA = {
         'type': int,
         'allow_special_values': True,
     },
+    'interleave_instances': {
+        'default': False,
+        'type': bool,
+    },
     'retry_interval_minutes': {
         'default': 0,
         'type': int,

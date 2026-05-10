@@ -48,6 +48,38 @@ _MAX_CONNECTION_ATTEMPTS: int = 3
 _RETRY_DELAY_SECONDS: int = 10
 
 
+def _allocate_slots(limit: int, client_backlogs: dict) -> list[tuple]:
+    """Allocate global removal slots using weighted round-robin distribution."""
+    if limit == 0 or not client_backlogs:
+        return []
+
+    winners: list[tuple] = []
+    pools = {client: list(items) for client, items in client_backlogs.items() if items}
+
+    sorted_clients = sorted(
+        pools.keys(),
+        key=lambda clt: (-getattr(clt, 'weight', 1.0), getattr(clt, 'name', '')),
+    )
+
+    while pools and (limit == -1 or len(winners) < limit):
+        for client in list(sorted_clients):
+            if client not in pools:
+                continue
+            turns = max(1, int(getattr(client, 'weight', 1.0)))
+            for _turn in range(turns):
+                if limit != -1 and len(winners) >= limit:
+                    break
+                if pools[client]:
+                    winners.append((client, pools[client].pop(0)))
+                if not pools[client]:
+                    del pools[client]
+                    break
+            if limit != -1 and len(winners) >= limit:
+                break
+
+    return winners
+
+
 def _calculate_eta(item_count: int, stagger_seconds: int) -> str:
     """Calculate and format estimated time for batch processing."""
     result = ''
@@ -57,12 +89,11 @@ def _calculate_eta(item_count: int, stagger_seconds: int) -> str:
     return result
 
 
-def _format_cycle_info(client_name: str, item_count: int, skip_stats: dict[str, int], stagger_seconds: int) -> str:
-    """Format cycle processing info message with counts and ETA."""
+def _format_cycle_info(client_name: str, item_count: int, skip_stats: dict[str, int]) -> str:
+    """Format cycle processing info message with counts."""
     total_eval = skip_stats['total_evaluated']
     skipped = skip_stats['ignored'] + skip_stats['tag_filtered'] + skip_stats.get('retry_interval', 0)
-    eta_str = _calculate_eta(item_count, stagger_seconds)
-    return f'[{client_name}] Found {item_count} items to remove (Evaluated: {total_eval}, Skipped: {skipped}{eta_str}).'
+    return f'[{client_name}] Found {item_count} items to remove (Evaluated: {total_eval}, Skipped: {skipped}).'
 
 
 def _get_setting(settings: dict, key: str) -> Any:
@@ -116,6 +147,8 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
     active_hours_str = active_hours if active_hours else 'All hours'
     retry_minutes = _get_setting(settings, 'retry_interval_minutes')
     retry_str = f'{retry_minutes}m' if retry_minutes > 0 else 'off'
+    interleave = _get_setting(settings, 'interleave_instances')
+    interleave_str = 'Yes' if interleave else 'No'
     stall_actions = {
         category: settings.get(category, settings.get('stalled', 'ignore')) for category in STALL_CATEGORIES
     }
@@ -129,24 +162,47 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
         f'Stagger: {stagger}s | '
         f'Active Hours: {active_hours_str} | '
         f'Retry Interval: {retry_str} | '
+        f'Interleave: {interleave_str} | '
         f'Handling: {action_str}'
     )
 
 
-def _run_removal_cycle(active_clients: list[Any], _settings: dict) -> None:
-    """Run a single removal cycle across all active clients."""
+def _run_removal_cycle(active_clients: list[Any], settings: dict) -> None:
+    """Run a single removal cycle across all active clients using global allocation."""
     _LOGGER.info('--- Starting removal cycle ---')
+    batch_size: int = _get_setting(settings, 'batch_size')
+    interleave: bool = _get_setting(settings, 'interleave_instances')
+    stagger: int = _get_setting(settings, 'stagger_interval_seconds')
 
+    backlogs: dict = {}
     for client in active_clients:
         items, skip_stats = client.get_stalled_items()
         if not items:
             _LOGGER.info(
                 f'[{client.name}] No stalled items found this cycle (Evaluated: {skip_stats["total_evaluated"]}).'
             )
-            continue
+        else:
+            _LOGGER.info(_format_cycle_info(client.name, len(items), skip_stats))
+            backlogs[client] = items
 
-        _LOGGER.info(_format_cycle_info(client.name, len(items), skip_stats, client.stagger_seconds))
-        client.remove_stalled(items)
+    if not backlogs or batch_size == 0:
+        return
+
+    queue = _allocate_slots(batch_size, backlogs)
+
+    if not interleave:
+        per_client: dict = {}
+        for client, item in queue:
+            per_client.setdefault(client, []).append(item)
+        queue = [(c, item) for c in active_clients for item in per_client.get(c, [])]
+
+    total = len(queue)
+    _LOGGER.info(f'Removing {total} item(s){_calculate_eta(total, stagger)}.')
+
+    for index, (client, item) in enumerate(queue, start=1):
+        client.execute_removal(item, index, total)
+        if stagger > 0 and index < total:
+            time.sleep(stagger)
 
 
 def _seconds_until_window_open(start: datetime.time, now: datetime.time, today: datetime.date | None = None) -> int:
@@ -191,39 +247,6 @@ def build_arr_clients(
             clients.append(client)
             _LOGGER.info(f'Registered {arr_type.capitalize()} instance: {instance["name"]}')
     return clients
-
-
-def verify_arr_clients(clients: list[ArrClient]) -> list[ArrClient]:
-    """Verify connectivity to each client, retrying before dropping unreachable ones.
-
-    Args:
-        clients: List of instantiated *arr clients to verify.
-
-    Returns:
-        Filtered list containing only clients that responded within the retry limit.
-    """
-    verified: list[ArrClient] = []
-    for client in clients:
-        connected = False
-        for attempt in range(1, _MAX_CONNECTION_ATTEMPTS + 1):
-            if client.check_connection():
-                if attempt > 1:
-                    _LOGGER.info(f'[{client.name}] Connected on attempt {attempt}/{_MAX_CONNECTION_ATTEMPTS}.')
-                connected = True
-                break
-            if attempt < _MAX_CONNECTION_ATTEMPTS:
-                _LOGGER.warning(
-                    f'[{client.name}] Connection attempt {attempt}/{_MAX_CONNECTION_ATTEMPTS} failed. '
-                    f'Retrying in {_RETRY_DELAY_SECONDS}s...'
-                )
-                time.sleep(_RETRY_DELAY_SECONDS)
-            else:
-                _LOGGER.error(
-                    f'[{client.name}] Could not connect after {_MAX_CONNECTION_ATTEMPTS} attempts. Skipping instance.'
-                )
-        if connected:
-            verified.append(client)
-    return verified
 
 
 def run() -> None:
@@ -277,6 +300,39 @@ def run() -> None:
         _run_removal_cycle(active_clients, settings)
         _LOGGER.info(f'--- Cycle complete. Sleeping for {run_interval_seconds}s. ---')
         time.sleep(run_interval_seconds)
+
+
+def verify_arr_clients(clients: list[ArrClient]) -> list[ArrClient]:
+    """Verify connectivity to each client, retrying before dropping unreachable ones.
+
+    Args:
+        clients: List of instantiated *arr clients to verify.
+
+    Returns:
+        Filtered list containing only clients that responded within the retry limit.
+    """
+    verified: list[ArrClient] = []
+    for client in clients:
+        connected = False
+        for attempt in range(1, _MAX_CONNECTION_ATTEMPTS + 1):
+            if client.check_connection():
+                if attempt > 1:
+                    _LOGGER.info(f'[{client.name}] Connected on attempt {attempt}/{_MAX_CONNECTION_ATTEMPTS}.')
+                connected = True
+                break
+            if attempt < _MAX_CONNECTION_ATTEMPTS:
+                _LOGGER.warning(
+                    f'[{client.name}] Connection attempt {attempt}/{_MAX_CONNECTION_ATTEMPTS} failed. '
+                    f'Retrying in {_RETRY_DELAY_SECONDS}s...'
+                )
+                time.sleep(_RETRY_DELAY_SECONDS)
+            else:
+                _LOGGER.error(
+                    f'[{client.name}] Could not connect after {_MAX_CONNECTION_ATTEMPTS} attempts. Skipping instance.'
+                )
+        if connected:
+            verified.append(client)
+    return verified
 
 
 if __name__ == '__main__':

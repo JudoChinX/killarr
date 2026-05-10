@@ -16,6 +16,7 @@ from killarr.clients.arr import LidarrClient
 from killarr.clients.arr import RadarrClient
 from killarr.clients.arr import SonarrClient
 from killarr.config_parser import load_config
+from killarr.main import _allocate_slots
 from killarr.main import _calculate_eta
 from killarr.main import _format_cycle_info
 from killarr.main import _get_setting
@@ -64,36 +65,32 @@ def test_calculate_eta(item_count: Any, stagger_seconds: Any, expected: Any) -> 
 
 
 _format_cycle_info_cases = {
-    'basic_no_stagger': {
+    'basic': {
         'client_name': 'Radarr',
         'item_count': 3,
         'skip_stats': {'total_evaluated': 10, 'ignored': 4, 'tag_filtered': 3},
-        'stagger_seconds': 0,
         'expected': '[Radarr] Found 3 items to remove (Evaluated: 10, Skipped: 7).',
     },
-    'with_stagger_eta': {
-        'client_name': 'Radarr',
-        'item_count': 2,
-        'skip_stats': {'total_evaluated': 10, 'ignored': 4, 'tag_filtered': 3},
-        'stagger_seconds': 5,
-        'expected': '[Radarr] Found 2 items to remove (Evaluated: 10, Skipped: 7, 1 every 5s, ETA: 0:00:10).',
+    'includes_retry_interval_in_skipped': {
+        'client_name': 'Sonarr',
+        'item_count': 1,
+        'skip_stats': {'total_evaluated': 5, 'ignored': 1, 'tag_filtered': 1, 'retry_interval': 1},
+        'expected': '[Sonarr] Found 1 items to remove (Evaluated: 5, Skipped: 3).',
     },
 }
 
 
 @pytest.mark.parametrize(
-    'client_name, item_count, skip_stats, stagger_seconds, expected',
+    'client_name, item_count, skip_stats, expected',
     [
-        (case['client_name'], case['item_count'], case['skip_stats'], case['stagger_seconds'], case['expected'])
+        (case['client_name'], case['item_count'], case['skip_stats'], case['expected'])
         for case in _format_cycle_info_cases.values()
     ],
     ids=list(_format_cycle_info_cases.keys()),
 )
-def test_format_cycle_info(
-    client_name: Any, item_count: Any, skip_stats: Any, stagger_seconds: Any, expected: Any
-) -> None:
+def test_format_cycle_info(client_name: Any, item_count: Any, skip_stats: Any, expected: Any) -> None:
     """Test that _format_cycle_info returns the correct formatted string."""
-    assert _format_cycle_info(client_name, item_count, skip_stats, stagger_seconds) == expected
+    assert _format_cycle_info(client_name, item_count, skip_stats) == expected
 
 
 _get_setting_cases = {
@@ -402,67 +399,21 @@ def test_build_arr_clients_returns_empty_for_empty_config() -> None:
     assert not clients
 
 
-def _make_mock_client(name: str = 'TestClient', stalled_items: list | None = None) -> MagicMock:
-    """Build a mock arr client with a configurable get_stalled_items return value."""
+def _make_mock_client(name: str = 'MockClient', stalled_items: list | None = None) -> MagicMock:
+    """Create a mock ArrClient with get_stalled_items pre-configured."""
     client = MagicMock()
     client.name = name
-    client.stagger_seconds = 0
+    client.weight = 1.0
     actual_items = stalled_items or []
-    stats = {'total_evaluated': len(actual_items), 'ignored': 0, 'tag_filtered': 0, 'not_stalled': 0}
+    stats = {
+        'total_evaluated': len(actual_items),
+        'ignored': 0,
+        'tag_filtered': 0,
+        'not_stalled': 0,
+        'retry_interval': 0,
+    }
     client.get_stalled_items.return_value = (actual_items, stats)
     return client
-
-
-_run_removal_cycle_cases = {
-    'calls_get_stalled_for_each_client': {
-        'clients': [_make_mock_client('R'), _make_mock_client('S')],
-        'stalled_items': None,
-        'expect_remove_called': False,
-        'expect_stalled_call_count': 2,
-    },
-    'calls_remove_when_items_found': {
-        'clients': [_make_mock_client(stalled_items=[(1, 10, 'Movie')])],
-        'stalled_items': [(1, 10, 'Movie')],
-        'expect_remove_called': True,
-        'expect_stalled_call_count': 1,
-    },
-    'skips_remove_when_no_items': {
-        'clients': [_make_mock_client(stalled_items=[])],
-        'stalled_items': [],
-        'expect_remove_called': False,
-        'expect_stalled_call_count': 1,
-    },
-}
-
-
-@pytest.mark.parametrize(
-    'clients, stalled_items, expect_remove_called, expect_stalled_call_count',
-    [
-        (
-            case['clients'],
-            case['stalled_items'],
-            case['expect_remove_called'],
-            case['expect_stalled_call_count'],
-        )
-        for case in _run_removal_cycle_cases.values()
-    ],
-    ids=list(_run_removal_cycle_cases.keys()),
-)
-def test_run_removal_cycle(
-    clients: Any,
-    stalled_items: Any,
-    expect_remove_called: Any,
-    expect_stalled_call_count: Any,
-) -> None:
-    """Test that _run_removal_cycle polls each client and removes stalled items as expected."""
-    _run_removal_cycle(clients, {})
-    total_stalled_calls = sum(client.get_stalled_items.call_count for client in clients)
-    assert total_stalled_calls == expect_stalled_call_count
-    if expect_remove_called:
-        clients[0].remove_stalled.assert_called_once_with(stalled_items)
-    else:
-        for client in clients:
-            client.remove_stalled.assert_not_called()
 
 
 def test_run_removal_cycle_logs_no_stalled_when_empty(caplog: Any) -> None:
@@ -481,6 +432,86 @@ def test_run_removal_cycle_logs_found_items_with_summary(caplog: Any) -> None:
         _run_removal_cycle([client], {})
     assert 'Found 1 items to remove' in caplog.text
     assert 'Evaluated:' in caplog.text
+
+
+def test_run_removal_cycle_calls_get_stalled_for_each_client() -> None:
+    """Test that _run_removal_cycle calls get_stalled_items on every client."""
+    clients = [_make_mock_client('R'), _make_mock_client('S')]
+    _run_removal_cycle(clients, {})
+    for client in clients:
+        client.get_stalled_items.assert_called_once()
+
+
+def test_run_removal_cycle_calls_execute_removal_for_each_allocated_item() -> None:
+    """Test that execute_removal is called once per allocated item."""
+    from killarr.clients.arr import QueueItem
+
+    item = QueueItem(1, 10, 'Movie', 'remove', 'no_messages', [])
+    client = _make_mock_client('R', stalled_items=[item])
+    _run_removal_cycle([client], {'no_messages': 'remove', 'batch_size': 10})
+    client.execute_removal.assert_called_once_with(item, 1, 1)
+
+
+def test_run_removal_cycle_skips_execute_when_no_items() -> None:
+    """Test that execute_removal is never called when no stalled items exist."""
+    client = _make_mock_client('R', stalled_items=[])
+    _run_removal_cycle([client], {})
+    client.execute_removal.assert_not_called()
+
+
+def test_run_removal_cycle_respects_global_batch_size() -> None:
+    """Test that batch_size caps total removals across all clients."""
+    from killarr.clients.arr import QueueItem
+
+    items = [QueueItem(i, i, f'M{i}', 'remove', 'no_messages', []) for i in range(1, 6)]
+    client = _make_mock_client('R', stalled_items=items)
+    _run_removal_cycle([client], {'batch_size': 2})
+    assert client.execute_removal.call_count == 2
+
+
+def test_run_removal_cycle_batch_size_zero_skips_execution() -> None:
+    """Test that batch_size=0 skips execute_removal even when items are present."""
+    from killarr.clients.arr import QueueItem
+
+    item = QueueItem(1, 10, 'Movie', 'remove', 'no_messages', [])
+    client = _make_mock_client('R', stalled_items=[item])
+    _run_removal_cycle([client], {'batch_size': 0})
+    client.execute_removal.assert_not_called()
+
+
+def test_run_removal_cycle_interleave_true_alternates_clients() -> None:
+    """Test that interleave_instances=True alternates items between clients."""
+    from killarr.clients.arr import QueueItem
+
+    item_a = QueueItem(1, 1, 'A', 'remove', 'no_messages', [])
+    item_b = QueueItem(2, 2, 'B', 'remove', 'no_messages', [])
+    ca = _make_mock_client('CA', stalled_items=[item_a])
+    cb = _make_mock_client('CB', stalled_items=[item_b])
+    ca.weight = 1.0
+    cb.weight = 1.0
+    _run_removal_cycle([ca, cb], {'interleave_instances': True, 'batch_size': -1})
+    ca.execute_removal.assert_called_once()
+    cb.execute_removal.assert_called_once()
+
+
+def test_run_removal_cycle_interleave_false_drains_per_client() -> None:
+    """Test that interleave_instances=False runs one client's items before the next."""
+    from killarr.clients.arr import QueueItem
+
+    calls = []
+    item_a1 = QueueItem(1, 1, 'A1', 'remove', 'no_messages', [])
+    item_a2 = QueueItem(2, 2, 'A2', 'remove', 'no_messages', [])
+    item_b1 = QueueItem(3, 3, 'B1', 'remove', 'no_messages', [])
+    ca = _make_mock_client('CA', stalled_items=[item_a1, item_a2])
+    cb = _make_mock_client('CB', stalled_items=[item_b1])
+    ca.weight = 1.0
+    cb.weight = 1.0
+    ca.execute_removal.side_effect = lambda item, i, t: calls.append(('CA', item))
+    cb.execute_removal.side_effect = lambda item, i, t: calls.append(('CB', item))
+    _run_removal_cycle([ca, cb], {'interleave_instances': False, 'batch_size': -1})
+    assert calls[0][0] == 'CA'
+    assert calls[1][0] == 'CA'
+    assert calls[2][0] == 'CB'
 
 
 def test_run_exits_when_no_config() -> None:
@@ -591,6 +622,30 @@ def test_log_killarr_start_shows_handling_actions(caplog: Any) -> None:
         _log_killarr_start([MagicMock()], {'stalled': 'remove'})
     assert 'Handling:' in caplog.text
     assert 'stalled=remove' in caplog.text
+
+
+def test_log_killarr_start_shows_interleave_yes(caplog: Any) -> None:
+    """Test that the startup banner includes Interleave: Yes when interleave_instances is True."""
+    from killarr.main import _log_killarr_start
+
+    client = MagicMock()
+    client.name = 'Radarr'
+    settings = {'interleave_instances': True}
+    with caplog.at_level(logging.INFO):
+        _log_killarr_start([client], settings)
+    assert 'Interleave: Yes' in caplog.text
+
+
+def test_log_killarr_start_shows_interleave_no(caplog: Any) -> None:
+    """Test that the startup banner includes Interleave: No when interleave_instances is False."""
+    from killarr.main import _log_killarr_start
+
+    client = MagicMock()
+    client.name = 'Radarr'
+    settings = {'interleave_instances': False}
+    with caplog.at_level(logging.INFO):
+        _log_killarr_start([client], settings)
+    assert 'Interleave: No' in caplog.text
 
 
 def test_run_env_source_loads_from_env(monkeypatch: Any) -> None:
@@ -771,3 +826,116 @@ def test_run_exits_when_all_verification_fails() -> None:
 
                 run()
     assert exc_info.value.code == 1
+
+
+def _make_client_with_weight(name: str, weight: float = 1.0) -> MagicMock:
+    """Create a minimal mock client with name and weight set."""
+    client = MagicMock()
+    client.name = name
+    client.weight = weight
+    return client
+
+
+_allocate_slots_cases = {
+    'limit_zero_returns_empty': {
+        'limit': 0,
+        'backlogs': {'a': ['i1', 'i2']},
+        'expected_count': 0,
+    },
+    'empty_backlogs_returns_empty': {
+        'limit': 10,
+        'backlogs': {},
+        'expected_count': 0,
+    },
+    'single_client_respects_limit': {
+        'limit': 2,
+        'backlogs': {'a': ['i1', 'i2', 'i3']},
+        'expected_count': 2,
+    },
+    'unlimited_returns_all': {
+        'limit': -1,
+        'backlogs': {'a': ['i1', 'i2', 'i3']},
+        'expected_count': 3,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'limit, backlogs, expected_count',
+    [(case['limit'], case['backlogs'], case['expected_count']) for case in _allocate_slots_cases.values()],
+    ids=list(_allocate_slots_cases.keys()),
+)
+def test_allocate_slots_basic(limit: Any, backlogs: Any, expected_count: Any) -> None:
+    """Test basic _allocate_slots behaviour for limits and empty inputs."""
+    clients = {_make_client_with_weight(k): v for k, v in backlogs.items()}
+    result = _allocate_slots(limit, clients)
+    assert len(result) == expected_count
+
+
+def test_allocate_slots_round_robins_two_clients() -> None:
+    """Test that _allocate_slots alternates items between two equal-weight clients."""
+    ca = _make_client_with_weight('A', weight=1.0)
+    cb = _make_client_with_weight('B', weight=1.0)
+    result = _allocate_slots(4, {ca: ['a1', 'a2'], cb: ['b1', 'b2']})
+    clients_in_order = [r[0] for r in result]
+    # With equal weight, should alternate: A B A B (or B A B A)
+    assert clients_in_order[0] != clients_in_order[1]
+    assert clients_in_order[1] != clients_in_order[2]
+    assert clients_in_order[2] != clients_in_order[3]
+
+
+def test_allocate_slots_higher_weight_gets_more_turns() -> None:
+    """Test that a client with weight=2 gets twice as many items per round as weight=1."""
+    ca = _make_client_with_weight('A', weight=2.0)
+    cb = _make_client_with_weight('B', weight=1.0)
+    # A gets 2 turns, B gets 1 turn per round — with 6 total slots: A=4, B=2
+    result = _allocate_slots(6, {ca: ['a1', 'a2', 'a3', 'a4'], cb: ['b1', 'b2']})
+    a_count = sum(1 for client, _ in result if client is ca)
+    b_count = sum(1 for client, _ in result if client is cb)
+    assert a_count == 4
+    assert b_count == 2
+
+
+def test_allocate_slots_exhausted_backlog_continues_other_clients() -> None:
+    """Test that when one client runs out of items, remaining slots go to others."""
+    ca = _make_client_with_weight('A', weight=1.0)
+    cb = _make_client_with_weight('B', weight=1.0)
+    result = _allocate_slots(5, {ca: ['a1'], cb: ['b1', 'b2', 'b3', 'b4']})
+    assert len(result) == 5
+    a_count = sum(1 for client, _ in result if client is ca)
+    b_count = sum(1 for client, _ in result if client is cb)
+    assert a_count == 1
+    assert b_count == 4
+
+
+def test_allocate_slots_stops_mid_turn_when_limit_hit() -> None:
+    """Test that _allocate_slots stops mid-turn when the limit is reached during a weighted client's turn."""
+    ca = _make_client_with_weight('A', weight=2.0)
+    result = _allocate_slots(1, {ca: ['a1', 'a2', 'a3']})
+    assert len(result) == 1
+    assert result[0][0] is ca
+    assert result[0][1] == 'a1'
+
+
+def test_run_removal_cycle_staggers_between_items(monkeypatch: Any) -> None:
+    """Test that _run_removal_cycle sleeps stagger_interval_seconds between items."""
+    from killarr.clients.arr import QueueItem
+
+    sleep_calls: list[float] = []
+    monkeypatch.setattr('killarr.main.time.sleep', sleep_calls.append)
+    items = [QueueItem(i, i, f'M{i}', 'remove', 'no_messages', []) for i in range(1, 3)]
+    client = _make_mock_client('R', stalled_items=items)
+    _run_removal_cycle([client], {'stagger_interval_seconds': 5, 'batch_size': -1})
+    assert sleep_calls == [5]  # one sleep between 2 items, none after last
+
+
+def test_run_removal_cycle_no_sleep_after_last_item(monkeypatch: Any) -> None:
+    """Test that _run_removal_cycle does not sleep after the final item."""
+    from killarr.clients.arr import QueueItem
+
+    sleep_calls: list[float] = []
+    monkeypatch.setattr('killarr.main.time.sleep', sleep_calls.append)
+    item = QueueItem(1, 1, 'M1', 'remove', 'no_messages', [])
+    client = _make_mock_client('R', stalled_items=[item])
+    _run_removal_cycle([client], {'stagger_interval_seconds': 5, 'batch_size': -1})
+    assert not sleep_calls  # only one item, no sleep
