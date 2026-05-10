@@ -13,10 +13,12 @@ from unittest.mock import patch
 import pytest
 
 from killarr.clients.arr import LidarrClient
+from killarr.clients.arr import QueueItem
 from killarr.clients.arr import RadarrClient
 from killarr.clients.arr import SonarrClient
 from killarr.config_parser import load_config
 from killarr.main import _allocate_slots
+from killarr.main import _apply_removal_order
 from killarr.main import _calculate_eta
 from killarr.main import _format_cycle_info
 from killarr.main import _get_setting
@@ -211,6 +213,73 @@ _seconds_until_window_open_cases = {
 def test_seconds_until_window_open(start: Any, now: Any, expected_seconds: Any) -> None:
     """Test that _seconds_until_window_open returns the correct number of seconds until the window opens."""
     assert _seconds_until_window_open(start, now, today=datetime.date(2026, 4, 23)) == expected_seconds
+
+
+def _make_item(queue_id: int, added: str) -> QueueItem:
+    """Build a minimal QueueItem with the given queue_id and added timestamp."""
+    return QueueItem(
+        queue_id=queue_id,
+        media_id=queue_id,
+        title=f'Item{queue_id}',
+        action='remove',
+        category='stalled',
+        messages=[],
+        added=added,
+    )
+
+
+_apply_removal_order_cases = {
+    'api_order_is_noop': {
+        'clients': [([_make_item(1, '2024-03-01T00:00:00Z'), _make_item(2, '2024-01-01T00:00:00Z')], [1, 2])],
+        'order': 'api_order',
+    },
+    'age_ascending_sorts_oldest_first': {
+        'clients': [([_make_item(1, '2024-03-01T00:00:00Z'), _make_item(2, '2024-01-01T00:00:00Z')], [2, 1])],
+        'order': 'age_ascending',
+    },
+    'age_descending_sorts_newest_first': {
+        'clients': [([_make_item(1, '2024-01-01T00:00:00Z'), _make_item(2, '2024-03-01T00:00:00Z')], [2, 1])],
+        'order': 'age_descending',
+    },
+    'empty_added_sorts_gracefully': {
+        'clients': [([_make_item(1, ''), _make_item(2, '2024-01-01T00:00:00Z')], [2, 1])],
+        'order': 'age_ascending',
+    },
+    'multiple_clients_each_sorted_independently': {
+        'clients': [
+            ([_make_item(1, '2024-03-01T00:00:00Z'), _make_item(2, '2024-01-01T00:00:00Z')], [2, 1]),
+            ([_make_item(3, '2024-06-01T00:00:00Z'), _make_item(4, '2024-02-01T00:00:00Z')], [4, 3]),
+        ],
+        'order': 'age_ascending',
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'clients, order',
+    [(case['clients'], case['order']) for case in _apply_removal_order_cases.values()],
+    ids=list(_apply_removal_order_cases.keys()),
+)
+def test_apply_removal_order(clients: Any, order: Any) -> None:
+    """Test that _apply_removal_order sorts client backlogs by the specified order."""
+    mock_clients = [MagicMock() for _ in clients]
+    backlogs = {mock_clients[idx]: list(items) for idx, (items, _) in enumerate(clients)}
+    _apply_removal_order(backlogs, order)
+    for idx, (_, expected_ids) in enumerate(clients):
+        result_ids = [item.queue_id for item in backlogs[mock_clients[idx]]]
+        assert result_ids == expected_ids
+
+
+def test_run_removal_cycle_applies_removal_order_before_removal() -> None:
+    """Test that _run_removal_cycle calls execute_removal in age_ascending order."""
+    old_item = QueueItem(1, 1, 'Old', 'remove', 'stalled', [], '2024-01-01T00:00:00Z')
+    new_item = QueueItem(2, 2, 'New', 'remove', 'stalled', [], '2024-06-01T00:00:00Z')
+    client = _make_mock_client('R', stalled_items=[new_item, old_item])
+    removal_calls: list[QueueItem] = []
+    client.execute_removal.side_effect = lambda item, idx, total: removal_calls.append(item)
+    _run_removal_cycle([client], {'removal_order': 'age_ascending', 'batch_size': -1})
+    assert removal_calls[0].queue_id == 1
+    assert removal_calls[1].queue_id == 2
 
 
 def _make_run_config(active_hours: str = '') -> dict:
@@ -444,8 +513,6 @@ def test_run_removal_cycle_calls_get_stalled_for_each_client() -> None:
 
 def test_run_removal_cycle_calls_execute_removal_for_each_allocated_item() -> None:
     """Test that execute_removal is called once per allocated item."""
-    from killarr.clients.arr import QueueItem
-
     item = QueueItem(1, 10, 'Movie', 'remove', 'no_messages', [])
     client = _make_mock_client('R', stalled_items=[item])
     _run_removal_cycle([client], {'no_messages': 'remove', 'batch_size': 10})
@@ -461,8 +528,6 @@ def test_run_removal_cycle_skips_execute_when_no_items() -> None:
 
 def test_run_removal_cycle_respects_global_batch_size() -> None:
     """Test that batch_size caps total removals across all clients."""
-    from killarr.clients.arr import QueueItem
-
     items = [QueueItem(i, i, f'M{i}', 'remove', 'no_messages', []) for i in range(1, 6)]
     client = _make_mock_client('R', stalled_items=items)
     _run_removal_cycle([client], {'batch_size': 2})
@@ -471,8 +536,6 @@ def test_run_removal_cycle_respects_global_batch_size() -> None:
 
 def test_run_removal_cycle_batch_size_zero_skips_execution() -> None:
     """Test that batch_size=0 skips execute_removal even when items are present."""
-    from killarr.clients.arr import QueueItem
-
     item = QueueItem(1, 10, 'Movie', 'remove', 'no_messages', [])
     client = _make_mock_client('R', stalled_items=[item])
     _run_removal_cycle([client], {'batch_size': 0})
@@ -481,8 +544,6 @@ def test_run_removal_cycle_batch_size_zero_skips_execution() -> None:
 
 def test_run_removal_cycle_interleave_true_alternates_clients() -> None:
     """Test that interleave_instances=True alternates items between clients."""
-    from killarr.clients.arr import QueueItem
-
     item_a = QueueItem(1, 1, 'A', 'remove', 'no_messages', [])
     item_b = QueueItem(2, 2, 'B', 'remove', 'no_messages', [])
     ca = _make_mock_client('CA', stalled_items=[item_a])
@@ -496,8 +557,6 @@ def test_run_removal_cycle_interleave_true_alternates_clients() -> None:
 
 def test_run_removal_cycle_interleave_false_drains_per_client() -> None:
     """Test that interleave_instances=False runs one client's items before the next."""
-    from killarr.clients.arr import QueueItem
-
     calls = []
     item_a1 = QueueItem(1, 1, 'A1', 'remove', 'no_messages', [])
     item_a2 = QueueItem(2, 2, 'A2', 'remove', 'no_messages', [])
@@ -919,8 +978,6 @@ def test_allocate_slots_stops_mid_turn_when_limit_hit() -> None:
 
 def test_run_removal_cycle_staggers_between_items(monkeypatch: Any) -> None:
     """Test that _run_removal_cycle sleeps stagger_interval_seconds between items."""
-    from killarr.clients.arr import QueueItem
-
     sleep_calls: list[float] = []
     monkeypatch.setattr('killarr.main.time.sleep', sleep_calls.append)
     items = [QueueItem(i, i, f'M{i}', 'remove', 'no_messages', []) for i in range(1, 3)]
@@ -931,8 +988,6 @@ def test_run_removal_cycle_staggers_between_items(monkeypatch: Any) -> None:
 
 def test_run_removal_cycle_no_sleep_after_last_item(monkeypatch: Any) -> None:
     """Test that _run_removal_cycle does not sleep after the final item."""
-    from killarr.clients.arr import QueueItem
-
     sleep_calls: list[float] = []
     monkeypatch.setattr('killarr.main.time.sleep', sleep_calls.append)
     item = QueueItem(1, 1, 'M1', 'remove', 'no_messages', [])

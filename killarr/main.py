@@ -80,6 +80,15 @@ def _allocate_slots(limit: int, client_backlogs: dict) -> list[tuple]:
     return winners
 
 
+def _apply_removal_order(client_backlogs: dict, removal_order: str) -> None:
+    """Sort each client's item list in-place by removal_order."""
+    if removal_order == 'api_order':
+        return
+    reverse = removal_order == 'age_descending'
+    for items in client_backlogs.values():
+        items.sort(key=lambda item: item.added or '9999', reverse=reverse)
+
+
 def _calculate_eta(item_count: int, stagger_seconds: int) -> str:
     """Calculate and format estimated time for batch processing."""
     result = ''
@@ -172,6 +181,7 @@ def _run_removal_cycle(active_clients: list[Any], settings: dict) -> None:
     _LOGGER.info('--- Starting removal cycle ---')
     batch_size: int = _get_setting(settings, 'batch_size')
     interleave: bool = _get_setting(settings, 'interleave_instances')
+    removal_order: str = _get_setting(settings, 'removal_order')
     stagger: int = _get_setting(settings, 'stagger_interval_seconds')
 
     backlogs: dict = {}
@@ -188,6 +198,7 @@ def _run_removal_cycle(active_clients: list[Any], settings: dict) -> None:
     if not backlogs or batch_size == 0:
         return
 
+    _apply_removal_order(backlogs, removal_order)
     queue = _allocate_slots(batch_size, backlogs)
 
     if not interleave:

@@ -86,6 +86,11 @@ SETTINGS_SCHEMA = {
         'default': False,
         'type': bool,
     },
+    'removal_order': {
+        'default': 'api_order',
+        'type': str,
+        'choices': ('age_ascending', 'age_descending', 'api_order'),
+    },
     'retry_interval_minutes': {
         'default': 0,
         'type': int,

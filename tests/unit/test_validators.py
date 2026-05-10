@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from killarr.validators import SETTINGS_SCHEMA
 from killarr.validators import _validate_active_hours
 from killarr.validators import validate_global_settings
 
@@ -77,8 +78,6 @@ _validate_global_settings_active_hours_cases = {
 )
 def test_validate_global_settings_active_hours(settings: Any, expect_error: bool) -> None:
     """Test that validate_global_settings calls through to _validate_active_hours."""
-    from killarr.validators import SETTINGS_SCHEMA
-
     if expect_error:
         with pytest.raises(ValueError):
             validate_global_settings(dict(settings), SETTINGS_SCHEMA)
@@ -115,12 +114,58 @@ _validate_interleave_instances_cases = {
 )
 def test_validate_interleave_instances(settings: Any, expected_value: Any, expect_error: bool) -> None:
     """Test that interleave_instances defaults to False and rejects non-bool values."""
-    from killarr.validators import SETTINGS_SCHEMA
-
-    s = dict(settings)
+    settings_copy = dict(settings)
     if expect_error:
         with pytest.raises(ValueError, match='interleave_instances'):
-            validate_global_settings(s, SETTINGS_SCHEMA)
+            validate_global_settings(settings_copy, SETTINGS_SCHEMA)
     else:
-        validate_global_settings(s, SETTINGS_SCHEMA)
-        assert s['interleave_instances'] == expected_value
+        validate_global_settings(settings_copy, SETTINGS_SCHEMA)
+        assert settings_copy['interleave_instances'] == expected_value
+
+
+_validate_removal_order_cases = {
+    'defaults_to_api_order': {
+        'settings': {},
+        'expected_value': 'api_order',
+        'expect_error': False,
+    },
+    'accepts_age_ascending': {
+        'settings': {'removal_order': 'age_ascending'},
+        'expected_value': 'age_ascending',
+        'expect_error': False,
+    },
+    'accepts_age_descending': {
+        'settings': {'removal_order': 'age_descending'},
+        'expected_value': 'age_descending',
+        'expect_error': False,
+    },
+    'rejects_unknown_value': {
+        'settings': {'removal_order': 'alphabetical'},
+        'expected_value': None,
+        'expect_error': True,
+    },
+    'rejects_non_string': {
+        'settings': {'removal_order': 42},
+        'expected_value': None,
+        'expect_error': True,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'settings, expected_value, expect_error',
+    [
+        (case['settings'], case['expected_value'], case['expect_error'])
+        for case in _validate_removal_order_cases.values()
+    ],
+    ids=list(_validate_removal_order_cases.keys()),
+)
+def test_validate_removal_order(settings: Any, expected_value: Any, expect_error: bool) -> None:
+    """Test that removal_order defaults to 'api_order' and rejects invalid values."""
+    settings_copy = dict(settings)
+    if expect_error:
+        with pytest.raises(ValueError, match='removal_order'):
+            validate_global_settings(settings_copy, SETTINGS_SCHEMA)
+    else:
+        validate_global_settings(settings_copy, SETTINGS_SCHEMA)
+        assert settings_copy['removal_order'] == expected_value
