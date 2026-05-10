@@ -261,6 +261,7 @@ def test_get_stalled_items_returns_queue_item_with_all_fields() -> None:
     assert items[0].action == 'blocklist'
     assert items[0].category == 'no_messages'
     assert items[0].messages == []
+    assert items[0].added == '2024-01-01T00:00:00Z'
 
 
 def test_get_stalled_items_skips_ignored_items() -> None:
@@ -825,3 +826,22 @@ def test_execute_removal_delegates_to_remove_single() -> None:
     with patch.object(client, '_remove_single') as mock_remove:
         client.execute_removal(item, 2, 5)
     mock_remove.assert_called_once_with(item, 2, 5)
+
+
+def test_get_stalled_items_surfaces_added_from_record() -> None:
+    """Test that get_stalled_items populates QueueItem.added from the raw queue record."""
+    client = ClientBuilder().radarr().with_settings(no_messages='remove').build()
+    record = RadarrQueueBuilder().warning().with_id(1).with_added('2024-03-15T10:00:00Z').build()
+    client.session.get = MagicMock(return_value=mock_queue_response([record]))
+    items, _stats = client.get_stalled_items()
+    assert items[0].added == '2024-03-15T10:00:00Z'
+
+
+def test_get_stalled_items_added_empty_when_missing_from_record() -> None:
+    """Test that QueueItem.added is empty string when the raw record has no added field."""
+    client = ClientBuilder().radarr().with_settings(no_messages='remove').build()
+    record = RadarrQueueBuilder().warning().with_id(1).build()
+    record.pop('added', None)
+    client.session.get = MagicMock(return_value=mock_queue_response([record]))
+    items, _stats = client.get_stalled_items()
+    assert items[0].added == ''

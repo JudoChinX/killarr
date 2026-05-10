@@ -36,6 +36,11 @@ class _QueueRecordBuilder:
         self._data['trackedDownloadStatus'] = 'warning'
         return self
 
+    def with_added(self, added: str) -> Self:
+        """Set the added timestamp field."""
+        self._data['added'] = added
+        return self
+
     def with_id(self, queue_id: int) -> Self:
         """Set the queue record ID."""
         self._data['id'] = queue_id
@@ -63,6 +68,7 @@ class RadarrQueueBuilder(_QueueRecordBuilder):
             'title': 'Test.Movie.2023.BluRay.mkv',
             'trackedDownloadStatus': 'warning',
             'tags': [],
+            'added': '2024-01-01T00:00:00Z',
         }
 
     def with_movie_id(self, movie_id: int) -> Self:
@@ -101,6 +107,7 @@ class SonarrQueueBuilder(_QueueRecordBuilder):
             'title': 'Show.S01E01.mkv',
             'trackedDownloadStatus': 'warning',
             'series': {'id': 10, 'title': 'Test Show', 'tags': []},
+            'added': '2024-01-01T00:00:00Z',
         }
 
     def with_episode_id(self, episode_id: int) -> Self:
@@ -139,6 +146,7 @@ class LidarrQueueBuilder(_QueueRecordBuilder):
             'title': 'Artist - Album (2023).zip',
             'trackedDownloadStatus': 'warning',
             'artist': {'id': 10, 'artistName': 'Test Artist', 'tags': []},
+            'added': '2024-01-01T00:00:00Z',
         }
 
     def with_album_id(self, album_id: int) -> Self:

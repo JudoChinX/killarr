@@ -23,6 +23,7 @@ class QueueItem(NamedTuple):
     action: str
     category: str
     messages: list[str]
+    added: str = ''
 
 
 class ArrClient(ABC):
@@ -296,7 +297,8 @@ class ArrClient(ABC):
                 continue
 
             queue_id = record['id']
-            items.append(QueueItem(queue_id, media_id, title, action, category, messages))
+            added = record.get('added', '')
+            items.append(QueueItem(queue_id, media_id, title, action, category, messages, added))
 
             if self.batch_size > 0 and len(items) >= self.batch_size:
                 break

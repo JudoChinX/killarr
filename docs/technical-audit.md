@@ -47,13 +47,14 @@ To be absolutely clear, Killarr does not and will never:
 
 ## Architecture Overview
 
-Killarr is a ~883-line Python service with four core modules:
+Killarr is a ~1,200-line Python service with five core modules:
 
 ```
 killarr/
 ├── main.py           # Entry point and run loop
 ├── classifier.py     # Stall reason classification logic
 ├── config_parser.py  # Configuration loading and validation
+├── validators.py     # Schema constants and validation functions
 └── clients/
     └── arr.py        # *arr API client implementations
 ```
@@ -69,9 +70,10 @@ Each cycle:
 3. Pass status messages to `classifier.py` to categorise the stall reason
 4. Resolve the named action (`ignore`, `remove`, `retry`, `blocklist`) based on configuration
 5. Apply tag filtering (include/exclude) and batch size limits
-6. DELETE each stalled item (with optional `removeFromClient` and `blocklist` params)
-7. POST a search command for each removed item (if action is `retry` or `blocklist`)
-8. Sleep for `interval` seconds and repeat
+6. Sort actionable items by `removal_order` setting (`api_order`, `age_ascending`, `age_descending`)
+7. DELETE each stalled item (with optional `removeFromClient` and `blocklist` params)
+8. POST a search command for each removed item (if action is `retry` or `blocklist`)
+9. Sleep for `interval` seconds and repeat
 
 ---
 
@@ -83,7 +85,9 @@ Each cycle:
 
 **Key Functions:**
 - `run()`: Loads configuration (file or env), builds clients, starts the infinite loop.
-- `_run_removal_cycle()`: Calls `get_stalled_items()` on each client and `execute_removal()` for any found.
+- `_run_removal_cycle()`: Collects stalled items from each client, sorts them via `_apply_removal_order()`, allocates removal slots via `_allocate_slots()`, and calls `execute_removal()` per item.
+- `_allocate_slots()`: Distributes the global batch limit across clients using weighted round-robin allocation.
+- `_apply_removal_order()`: Sorts each client's backlog in-place by the `removal_order` setting before slot allocation.
 - `build_arr_clients()`: Instantiates \*arr clients from the parsed config, merging global settings with per-instance overrides.
 - `_load_config_from_paths()`: Tries each config file path in order, returning the first successfully loaded config.
 - `_get_setting()`: Helper to read a setting with fallback to the schema default.
@@ -124,7 +128,7 @@ Each cycle:
 - `LidarrClient`: Lidarr-specific implementation (v1 endpoints, `albumId`, `AlbumSearch` command).
 
 **Key Methods:**
-- `get_stalled_items()`: Fetches the full queue, filters for stalled items, classifies them via `classifier.py`, and applies tag filtering and batch limits. Returns a tuple of `(actionable_items, skip_stats)` where `skip_stats` is a dictionary of evaluation and skip counts.
+- `get_stalled_items()`: Fetches the full queue, filters for stalled items, classifies them via `classifier.py`, and applies tag filtering and batch limits. Returns a tuple of `(actionable_items, skip_stats)` where each `QueueItem` carries `queue_id`, `media_id`, `title`, `action`, `category`, `messages`, and `added` (ISO 8601 timestamp from the \*arr API).
 - `_fetch_all_queue()`: Paginates through the \*arr queue endpoint until all records are retrieved.
 - `_is_stalled()`: Returns `True` if `trackedDownloadStatus == "warning"`.
 - `execute_removal()`: Removes a single queue item by delegating to `_remove_single()`.
@@ -189,9 +193,9 @@ This is the ONLY place API keys are used. They are:
 DELETE and POST requests are the only write operations. Both are guarded by the `dry_run` check:
 
 ```python
-def _remove_single(self, queue_id, media_id, title, action, index, total):
+def _remove_single(self, item: QueueItem, index: int, total: int) -> None:
     if self.dry_run:
-        _LOGGER.info(f'[{self.name}] [DRY RUN] Would {action}: {title}')
+        _LOGGER.info(f'[{self.name}] [DRY RUN] Would {item.action} ({item.category}): {item.title} ({index}/{total})')
         return
     # ... DELETE request
 ```
@@ -288,12 +292,13 @@ Every line of AI-generated code was reviewed, tested, and validated against requ
 
 ## Testing Strategy
 
-**Test Coverage:** 159 tests, 99.37% coverage.
+**Test Coverage:** 270 tests, 99.36% coverage.
 
-- `tests/test_config_parser.py`: Configuration validation, schema defaults, shared config, env var mode — no network calls.
-- `tests/test_arr_client.py`: Queue fetch, stall filtering, removal, search-again, tag resolution, dry run, stagger — all with mocked HTTP responses.
-- `tests/test_classifier.py`: Stall reason classification tests — no network calls.
-- `tests/test_main.py`: Run loop, cycle orchestration, client building, config loading — mocked clients and config paths.
+- `tests/unit/test_config_parser.py`: Configuration validation, schema defaults, shared config, env var mode — no network calls.
+- `tests/unit/test_validators.py`: Schema validation and setting constraints — no network calls.
+- `tests/unit/test_classifier.py`: Stall reason classification tests — no network calls.
+- `tests/integration/test_arr_client.py`: Queue fetch, stall filtering, removal, search-again, tag resolution, dry run, stagger — all with mocked HTTP responses.
+- `tests/system/test_main.py`: Run loop, cycle orchestration, client building, config loading — mocked clients and config paths.
 - `tests/builders.py`: Builder pattern for constructing queue record fixtures and client instances in tests.
 - `tests/helpers.py`: Mock HTTP response factories for queue and tag endpoints.
 
@@ -323,13 +328,14 @@ Development (see `requirements-dev.txt`):
 
 ## File Sizes
 
-- `killarr/main.py`: 184 lines
-- `killarr/classifier.py`: 41 lines
-- `killarr/config_parser.py`: 333 lines
-- `killarr/clients/arr.py`: 323 lines
+- `killarr/main.py`: 298 lines
+- `killarr/classifier.py`: 87 lines
+- `killarr/config_parser.py`: 248 lines
+- `killarr/validators.py`: 167 lines
+- `killarr/clients/arr.py`: 402 lines
 - `killarr/__init__.py`: 1 line (package marker)
 - `killarr/clients/__init__.py`: 1 line (package marker)
-- **Total:** ~883 lines of Python
+- **Total:** ~1,204 lines of Python
 
 The small codebase size makes comprehensive security auditing feasible.
 
@@ -340,7 +346,7 @@ The small codebase size makes comprehensive security auditing feasible.
 Don't trust documentation — verify the claims:
 
 1. **Run the tests:** `pytest` — see that security-relevant code is tested.
-2. **Read the code:** Start with `killarr/main.py` — 184 lines.
+2. **Read the code:** Start with `killarr/main.py` — 298 lines.
 3. **Check the API calls:** Enable `LOG_LEVEL=DEBUG` — every HTTP request and detailed skip reasons are logged.
 4. **Observe the cycle:** Look for cycle summaries in the logs (`Found X items to remove (Evaluated: Y, Skipped: Z)`) to confirm operation.
 5. **Review dependencies:** `cat requirements.txt` — two libraries, both standard.
