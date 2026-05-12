@@ -37,6 +37,8 @@ killarr:
   # tba_title: ignore         # Episode title not yet announced
   # dangerous_file: blocklist  # Fake/malicious releases (.exe, .iso)
 
+  # removal_order: api_order    # Item order within a cycle: api_order, age_ascending, age_descending
+
   # include_tags: ["active"]   # Only act on items with ANY of these tags
   # exclude_tags: ["protected"] # Skip items with ANY of these tags
 
