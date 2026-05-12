@@ -18,11 +18,12 @@ To be absolutely clear, Killarr does not and will never:
 
 ## Verify It Yourself
 
-The entire application is four source files. The links below track the `main` branch — once a stable release tag exists, they will be updated to point to it:
+The entire application is five source files. The links below track the `main` branch — once a stable release tag exists, they will be updated to point to it:
 
 - [`killarr/main.py`](https://github.com/JudoChinX/killarr/blob/main/killarr/main.py) — orchestration loop
 - [`killarr/classifier.py`](https://github.com/JudoChinX/killarr/blob/main/killarr/classifier.py) — stall reason classification
 - [`killarr/config_parser.py`](https://github.com/JudoChinX/killarr/blob/main/killarr/config_parser.py) — configuration loading and validation
+- [`killarr/validators.py`](https://github.com/JudoChinX/killarr/blob/main/killarr/validators.py) — schema constants and validation functions
 - [`killarr/clients/arr.py`](https://github.com/JudoChinX/killarr/blob/main/killarr/clients/arr.py) — \*arr API client
 
 The only direct dependencies are [`requests`](https://github.com/psf/requests) and [`PyYAML`](https://github.com/yaml/pyyaml), both widely used and well-maintained with public security disclosure policies. `requests` pulls in four transitive dependencies ([`certifi`](https://github.com/certifi/python-certifi), [`charset-normalizer`](https://github.com/Ousret/charset_normalizer), [`idna`](https://github.com/kjd/idna), [`urllib3`](https://github.com/urllib3/urllib3)); `PyYAML` has none.

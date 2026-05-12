@@ -52,10 +52,15 @@
 ## Key Features
 
 - **Stall Detection:** Identifies downloads stuck in a warning state via `trackedDownloadStatus`.
-- **Stall Classification:** Inspects `statusMessages` to categorise each stall (`no_upgrade`, `manual_import`, `no_files`, `missing_items`, `tba_title`, or the generic `stalled` fallback).
+- **Stall Classification:** Inspects `statusMessages` to categorise each stall into one of nine categories: `no_upgrade`, `manual_import`, `no_files`, `missing_items`, `tba_title`, `dangerous_file`, `no_messages`, `unknown`, or the generic `stalled` fallback.
 - **Named Actions:** Assign `ignore`, `remove`, `retry`, or `blocklist` per category — globally or per instance.
-- **Batch Size Controls:** Limit removals per cycle (`0` = disabled, `-1` = unlimited, `N` = limit to N).
+- **Batch Size Controls:** Limit removals per cycle (`0` = disabled, `-1` = unlimited, `N` = global cap across all instances).
+- **Weighted Round-Robin Allocation:** Distribute the batch budget across instances by weight; interleave items from different instances or drain one at a time.
+- **Removal Ordering:** Process stalled items in API order, oldest-first, or newest-first via `removal_order`.
+- **Active Hours:** Restrict removal cycles to a configured time window (e.g. `06:00-23:00`). Overnight windows are supported.
+- **Per-Media Cooldown:** Skip re-actioning the same media within a configurable interval (`retry_interval_minutes`) to avoid churn when replacements stall immediately.
 - **Tag Filtering:** Include or exclude items based on tags set in your \*arr instances.
+- **Startup Verification:** Unreachable instances are retried and then skipped, rather than crashing the service.
 - **Detailed Logging:** Cycle summaries with evaluation counts, removal ETAs, and granular skip reasons (DEBUG level).
 - **Dry Run Mode:** Log what would be removed without making any changes.
 - **Shared Config with [Rangarr](https://github.com/JudoChinX/rangarr):** Killarr reads the same `instances:` section as Rangarr. Both tools can share a single `config.yaml` — no duplication required.
@@ -114,7 +119,7 @@ See [config.example.yaml](config.example.yaml) for a full reference including ta
 
 ## Development Transparency
 
-AI tooling was used to assist with development tasks in this project. The architecture — no database, no persistence layer, four files, two dependencies — was designed by the author. All code is human-reviewed before inclusion.
+AI tooling was used to assist with development tasks in this project. The architecture — no database, no persistence layer, five files, two dependencies — was designed by the author. All code is human-reviewed before inclusion.
 
 ## Contributing
 
