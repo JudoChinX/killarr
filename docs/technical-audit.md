@@ -47,7 +47,7 @@ To be absolutely clear, Killarr does not and will never:
 
 ## Architecture Overview
 
-Killarr is a ~1,200-line Python service with five core modules:
+Killarr is a ~1,255-line Python service with five core modules:
 
 ```
 killarr/
@@ -116,6 +116,16 @@ Each cycle:
 **No network activity:** Pure configuration parsing; never makes HTTP requests.
 
 **Security note:** API keys are extracted from config and passed to client instances. Keys are never logged.
+
+### validators.py — Schema Constants and Validation
+
+**Purpose:** Defines `SETTINGS_SCHEMA` and `STALL_CATEGORIES`, and implements all validation logic for configuration values.
+
+**Key Functions:**
+- `validate_global_settings()`: Applies defaults and validates all settings against their schema definitions.
+- `validate_stall_action_settings()`: Validates any stall category action values present in settings.
+
+**No network activity:** Pure validation logic.
 
 ### clients/arr.py — \*arr API Client
 
@@ -215,7 +225,7 @@ Killarr operates entirely within your local network:
 
 ### 1. Security Through Simplicity
 
-**Decision:** ~883 lines of core Python code, zero external dependencies beyond `requests` and `PyYAML`.
+**Decision:** ~1,255 lines of core Python code, zero external dependencies beyond `requests` and `PyYAML`.
 
 **Why:** Small codebases are auditable. Every line of code is a potential attack surface. By keeping the codebase minimal, security reviewers can read and understand the entire project in under an hour.
 
@@ -235,7 +245,7 @@ Killarr operates entirely within your local network:
 
 ### 4. Test Coverage as Documentation
 
-**Decision:** 159 tests covering all code paths including error conditions.
+**Decision:** 288 tests covering all code paths including error conditions.
 
 **Why:** Tests serve three purposes:
 1. Prevent regressions.
@@ -292,7 +302,7 @@ Every line of AI-generated code was reviewed, tested, and validated against requ
 
 ## Testing Strategy
 
-**Test Coverage:** 270 tests, 99.36% coverage.
+**Test Coverage:** 288 tests, 99.39% coverage.
 
 - `tests/unit/test_config_parser.py`: Configuration validation, schema defaults, shared config, env var mode — no network calls.
 - `tests/unit/test_validators.py`: Schema validation and setting constraints — no network calls.
@@ -328,14 +338,14 @@ Development (see `requirements-dev.txt`):
 
 ## File Sizes
 
-- `killarr/main.py`: 298 lines
+- `killarr/main.py`: 349 lines
 - `killarr/classifier.py`: 87 lines
 - `killarr/config_parser.py`: 248 lines
-- `killarr/validators.py`: 167 lines
-- `killarr/clients/arr.py`: 402 lines
+- `killarr/validators.py`: 171 lines
+- `killarr/clients/arr.py`: 398 lines
 - `killarr/__init__.py`: 1 line (package marker)
 - `killarr/clients/__init__.py`: 1 line (package marker)
-- **Total:** ~1,204 lines of Python
+- **Total:** ~1,255 lines of Python
 
 The small codebase size makes comprehensive security auditing feasible.
 
@@ -346,7 +356,7 @@ The small codebase size makes comprehensive security auditing feasible.
 Don't trust documentation — verify the claims:
 
 1. **Run the tests:** `pytest` — see that security-relevant code is tested.
-2. **Read the code:** Start with `killarr/main.py` — 298 lines.
+2. **Read the code:** Start with `killarr/main.py` — 349 lines.
 3. **Check the API calls:** Enable `LOG_LEVEL=DEBUG` — every HTTP request and detailed skip reasons are logged.
 4. **Observe the cycle:** Look for cycle summaries in the logs (`Found X items to remove (Evaluated: Y, Skipped: Z)`) to confirm operation.
 5. **Review dependencies:** `cat requirements.txt` — two libraries, both standard.

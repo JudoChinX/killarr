@@ -159,7 +159,7 @@ killarr:
 
 **Type:** Integer | **Default:** `10`
 
-Maximum number of stalled items to remove per cycle per instance.
+Maximum number of stalled items to remove per cycle across all instances combined.
 
 - Set to `0` to disable removal entirely (Killarr will still log found items at DEBUG level)
 - Set to `-1` for unlimited (remove all stalled items found each cycle)
@@ -172,6 +172,17 @@ killarr:
   # batch_size: 0   # Disabled — no removals
 ```
 
+#### `interleave_instances`
+
+**Type:** Boolean | **Default:** `false`
+
+When `false` (default), all stalled items from the first instance are removed before moving to the next. When `true`, items from different instances alternate in the removal queue — Killarr removes one item from instance A, then one from instance B, and so on.
+
+```yaml
+killarr:
+  interleave_instances: true  # Alternate between instances during removal
+```
+
 #### `stagger_interval_seconds`
 
 **Type:** Integer | **Default:** `5` | **Minimum:** `0`
@@ -181,6 +192,20 @@ Seconds to wait between individual removal operations within a single cycle. Set
 ```yaml
 killarr:
   stagger_interval_seconds: 10  # Wait 10s between removals
+```
+
+#### `active_hours`
+
+**Type:** String | **Default:** `""` (all hours)
+
+Restricts removal cycles to a configured time window. Outside this window, Killarr skips the cycle and sleeps until the window opens. Format is `HH:MM-HH:MM` in 24-hour time. Overnight windows that cross midnight are supported.
+
+Leave empty (or omit) to run at all hours.
+
+```yaml
+killarr:
+  active_hours: "06:00-23:00"   # Only remove between 6am and 11pm
+  # active_hours: "22:00-06:00" # Overnight window (crosses midnight)
 ```
 
 #### `removal_order`
@@ -198,6 +223,19 @@ Items with no `added` timestamp sort last in `age_ascending` order and first in 
 ```yaml
 killarr:
   removal_order: age_ascending  # Process oldest stalled items first
+```
+
+#### `retry_interval_minutes`
+
+**Type:** Integer | **Default:** `0` (disabled)
+
+Per-media cooldown period in minutes. When a stalled item is actioned, its media ID is recorded with a timestamp. If the same media ID appears stalled again within the cooldown window, it is skipped until the interval expires.
+
+This prevents repeatedly actioning the same media in back-to-back cycles — useful when a replacement download stalls immediately after the original was removed.
+
+```yaml
+killarr:
+  retry_interval_minutes: 30  # Skip re-actioning the same media for 30 minutes
 ```
 
 #### `include_tags`
@@ -247,6 +285,7 @@ Killarr classifies each stalled item into a category based on its `statusMessage
 | `no_files` | "No files found are eligible for import". |
 | `missing_items` | "Episodes/tracks missing from the release". |
 | `tba_title` | "TBA title" (common in Sonarr for unannounced episodes). |
+| `dangerous_file` | "Potentially dangerous file extension" (e.g., `.exe`, `.iso`). |
 | `no_messages` | Stall detected but no status messages were provided by the \*arr app. |
 | `unknown` | Status messages are present but did not match any known patterns. |
 
@@ -303,7 +342,7 @@ Instances are disabled by default as a safety measure. You must explicitly set t
 
 **Type:** Number | **Default:** `1`
 
-Relative priority used only when `batch_size` is a positive integer and multiple instances of the same type are configured. Higher weight = more removals allocated from the batch.
+Relative priority for slot allocation when `batch_size` limits total removals per cycle. Higher weight = proportionally more removal slots from the global batch allocated to this instance.
 
 ### Per-Instance Killarr Overrides
 
@@ -345,8 +384,11 @@ Prefix global settings with `KILLARR_GLOBAL_`.
 | `KILLARR_GLOBAL_INTERVAL` | `3600` | Run interval in seconds. |
 | `KILLARR_GLOBAL_DRY_RUN` | `false` | Log removals without executing them. |
 | `KILLARR_GLOBAL_BATCH_SIZE` | `10` | Items to remove per cycle. `0` disables, `-1` is unlimited. |
+| `KILLARR_GLOBAL_INTERLEAVE_INSTANCES` | `false` | Alternate items between instances during removal. |
 | `KILLARR_GLOBAL_STAGGER_INTERVAL_SECONDS` | `5` | Delay in seconds between individual removals. |
+| `KILLARR_GLOBAL_ACTIVE_HOURS` | `(none)` | Time window for removals in `HH:MM-HH:MM` format (e.g. `06:00-23:00`). |
 | `KILLARR_GLOBAL_REMOVAL_ORDER` | `api_order` | Item processing order: `api_order`, `age_ascending`, or `age_descending`. |
+| `KILLARR_GLOBAL_RETRY_INTERVAL_MINUTES` | `0` | Per-media cooldown in minutes. `0` disables. |
 | `KILLARR_GLOBAL_INCLUDE_TAGS` | `(none)` | Comma-separated tag names. |
 | `KILLARR_GLOBAL_EXCLUDE_TAGS` | `(none)` | Comma-separated tag names. |
 | `KILLARR_GLOBAL_STALLED` | `ignore` | Action for `stalled` category. |
@@ -355,6 +397,7 @@ Prefix global settings with `KILLARR_GLOBAL_`.
 | `KILLARR_GLOBAL_NO_FILES` | `ignore` | Action for `no_files` category. |
 | `KILLARR_GLOBAL_MISSING_ITEMS` | `ignore` | Action for `missing_items` category. |
 | `KILLARR_GLOBAL_TBA_TITLE` | `ignore` | Action for `tba_title` category. |
+| `KILLARR_GLOBAL_DANGEROUS_FILE` | `ignore` | Action for `dangerous_file` category. |
 | `KILLARR_GLOBAL_NO_MESSAGES` | `ignore` | Action for `no_messages` category. |
 | `KILLARR_GLOBAL_UNKNOWN` | `ignore` | Action for `unknown` category. |
 
@@ -455,7 +498,7 @@ If you have media that should never be auto-removed (e.g., seeding torrents, man
 
 ## Troubleshooting
 
-### connection Errors
+### Connection Errors
 
 #### "Failed to fetch queue" in logs
 
@@ -497,13 +540,9 @@ See the [Style Guide](style-guide.md) for detailed coding conventions.
 git clone https://github.com/JudoChinX/killarr.git
 cd killarr
 
-# Create a virtual environment
-uv venv --python 3.13 .venv
-source .venv/bin/activate
-
-# Install dev dependencies
-pip install -r requirements-dev.txt
+# Install all dependencies (including dev)
+uv sync
 
 # Run the test suite
-pytest
+uv run pytest
 ```

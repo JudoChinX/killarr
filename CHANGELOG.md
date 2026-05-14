@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `removal_order` setting: control the order in which stalled items are processed within a cycle (`api_order`, `age_ascending`, `age_descending`).
+- `interleave_instances` setting: when `true`, items from different instances alternate in the removal queue rather than draining one instance at a time.
+- `weight` per-instance setting: priority multiplier for weighted round-robin slot allocation across the global `batch_size` budget.
+- `retry_interval_minutes` setting: per-media cooldown — skip re-actioning the same media ID within the configured interval to avoid churn when replacements stall immediately.
+- `active_hours` setting: restrict removal cycles to a configured time window (`HH:MM-HH:MM`). Overnight windows are supported. Outside the window, Killarr sleeps until the window opens.
+- Startup connection verification: each configured instance is tested at startup with configurable retries. Instances that fail to connect are skipped rather than crashing the service.
+
 
 ## [0.0.3] - 2026-04-28
 
