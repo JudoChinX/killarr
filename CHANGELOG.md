@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.0.4] - 2026-05-13
+
 ### Added
 
 - `removal_order` setting: control the order in which stalled items are processed within a cycle (`api_order`, `age_ascending`, `age_descending`).
