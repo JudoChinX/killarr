@@ -97,6 +97,14 @@ def _calculate_eta(item_count: int, stagger_seconds: int) -> str:
     return result
 
 
+def _fmt_action(value: Any) -> str:
+    """Format a stall action setting value as a human-readable flag string."""
+    if isinstance(value, dict):
+        flags = [k for k in ('remove', 'blocklist', 'search') if value.get(k)]
+        return '+'.join(flags) if flags else 'ignore'
+    return str(value) if value else 'ignore'
+
+
 def _format_cycle_info(client_name: str, item_count: int, skip_stats: dict[str, int]) -> str:
     """Format cycle processing info message with counts."""
     total_eval = skip_stats['total_evaluated']
@@ -114,14 +122,6 @@ def _is_within_active_hours(start: datetime.time, end: datetime.time, now: datet
     if start <= end:
         return start <= now < end
     return now >= start or now < end
-
-
-def _fmt_action(value: Any) -> str:
-    """Format a stall action setting value as a human-readable flag string."""
-    if isinstance(value, dict):
-        flags = [k for k in ('remove', 'blocklist', 'search') if value.get(k)]
-        return '+'.join(flags) if flags else 'ignore'
-    return str(value) if value else 'ignore'
 
 
 def _load_config_from_paths(config_paths: list[str]) -> dict | None:
