@@ -116,6 +116,14 @@ def _is_within_active_hours(start: datetime.time, end: datetime.time, now: datet
     return now >= start or now < end
 
 
+def _fmt_action(value: Any) -> str:
+    """Format a stall action setting value as a human-readable flag string."""
+    if isinstance(value, dict):
+        flags = [k for k in ('remove', 'blocklist', 'search') if value.get(k)]
+        return '+'.join(flags) if flags else 'ignore'
+    return str(value) if value else 'ignore'
+
+
 def _load_config_from_paths(config_paths: list[str]) -> dict | None:
     """Attempt to load configuration from a list of possible file paths."""
     config = None
@@ -158,7 +166,7 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
     interleave = _get_setting(settings, 'interleave_instances')
     interleave_str = 'Yes' if interleave else 'No'
     stall_actions = {
-        category: settings.get(category, settings.get('stalled', 'ignore')) for category in STALL_CATEGORIES
+        category: _fmt_action(settings.get(category, settings.get('stalled'))) for category in STALL_CATEGORIES
     }
     action_str = ', '.join(f'{category}={action}' for category, action in stall_actions.items())
 

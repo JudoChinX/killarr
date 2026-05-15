@@ -20,7 +20,9 @@ class QueueItem(NamedTuple):
     queue_id: int
     media_id: int
     title: str
-    action: str
+    remove: bool
+    blocklist: bool
+    search: bool
     category: str
     messages: list[str]
     added: str = ''
@@ -146,14 +148,23 @@ class ArrClient(ABC):
     def _remove_single(self, item: QueueItem, index: int, total: int) -> None:
         """DELETE a single queue item and optionally trigger a fresh search."""
         _LOGGER.debug(f'[{self.name}] Stall details for "{item.title}": {item.messages}')
+        flags = []
+        if item.remove:
+            flags.append('remove')
+        if item.blocklist:
+            flags.append('blocklist')
+        if item.search:
+            flags.append('search')
+        action_label = '+'.join(flags) if flags else 'ignore'
+
         if self.dry_run:
             _LOGGER.info(
-                f'[{self.name}] [DRY RUN] Would {item.action} ({item.category}): {item.title} ({index}/{total})'
+                f'[{self.name}] [DRY RUN] Would {action_label} ({item.category}): {item.title} ({index}/{total})'
             )
             return
 
         params: dict[str, str] = {'removeFromClient': 'true'}
-        if item.action == 'blocklist':
+        if item.blocklist:
             params['blocklist'] = 'true'
 
         url = f'{self.url}{self.ENDPOINT_QUEUE}/{item.queue_id}'
@@ -161,27 +172,32 @@ class ArrClient(ABC):
             response = self.session.delete(url, params=params, timeout=15)
             if response.status_code == 404:
                 _LOGGER.info(
-                    f'[{self.name}] Removed ({item.action}, {item.category}, cascade): {item.title} ({index}/{total})'
+                    f'[{self.name}] Removed ({action_label}, {item.category}, cascade): {item.title} ({index}/{total})'
                 )
                 self._record_retry_interval(item.media_id, item.title)
             else:
                 response.raise_for_status()
-                _LOGGER.info(f'[{self.name}] Removed ({item.action}, {item.category}): {item.title} ({index}/{total})')
+                _LOGGER.info(f'[{self.name}] Removed ({action_label}, {item.category}): {item.title} ({index}/{total})')
                 self._record_retry_interval(item.media_id, item.title)
         except requests.RequestException as error:
             _LOGGER.error(f'[{self.name}] Failed to remove {item.title} (ID: {item.queue_id}): {error}')
             return
 
-        if item.action in ('retry', 'blocklist'):
+        if item.search:
             self._trigger_search(item.media_id, item.title)
 
-    def _resolve_action(self, category: str) -> str:
-        """Resolve the action for a stall category using the config hierarchy."""
+    def _resolve_action(self, category: str) -> dict[str, bool]:
+        """Resolve the action flags for a stall category using the config hierarchy."""
         action = self.settings.get(category)
         if not action and category != 'stalled':
             action = self.settings.get('stalled')
-
-        return action or 'ignore'
+        if not action:
+            action = {}
+        return {
+            'remove': bool(action.get('remove', False)),
+            'blocklist': bool(action.get('blocklist', False)),
+            'search': bool(action.get('search', False)),
+        }
 
     def _resolve_tag_ids(self) -> None:
         """Fetch instance tags and resolve configured tag names to IDs."""
@@ -280,7 +296,7 @@ class ArrClient(ABC):
                 )
             action = self._resolve_action(category)
 
-            if action == 'ignore':
+            if not action['remove']:
                 _LOGGER.debug(f'[{self.name}] Skipping stalled item (action: ignore, category: {category}): {title}')
                 skip_stats['ignored'] += 1
                 continue
@@ -298,7 +314,19 @@ class ArrClient(ABC):
 
             queue_id = record['id']
             added = record.get('added', '')
-            items.append(QueueItem(queue_id, media_id, title, action, category, messages, added))
+            items.append(
+                QueueItem(
+                    queue_id,
+                    media_id,
+                    title,
+                    action['remove'],
+                    action['blocklist'],
+                    action['search'],
+                    category,
+                    messages,
+                    added,
+                )
+            )
 
             if self.batch_size > 0 and len(items) >= self.batch_size:
                 break

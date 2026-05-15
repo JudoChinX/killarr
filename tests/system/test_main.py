@@ -221,7 +221,9 @@ def _make_item(queue_id: int, added: str) -> QueueItem:
         queue_id=queue_id,
         media_id=queue_id,
         title=f'Item{queue_id}',
-        action='remove',
+        remove=True,
+        blocklist=False,
+        search=False,
         category='stalled',
         messages=[],
         added=added,
@@ -272,8 +274,8 @@ def test_apply_removal_order(clients: Any, order: Any) -> None:
 
 def test_run_removal_cycle_applies_removal_order_before_removal() -> None:
     """Test that _run_removal_cycle calls execute_removal in age_ascending order."""
-    old_item = QueueItem(1, 1, 'Old', 'remove', 'stalled', [], '2024-01-01T00:00:00Z')
-    new_item = QueueItem(2, 2, 'New', 'remove', 'stalled', [], '2024-06-01T00:00:00Z')
+    old_item = QueueItem(1, 1, 'Old', True, False, False, 'stalled', [], '2024-01-01T00:00:00Z')
+    new_item = QueueItem(2, 2, 'New', True, False, False, 'stalled', [], '2024-06-01T00:00:00Z')
     client = _make_mock_client('R', stalled_items=[new_item, old_item])
     removal_calls: list[QueueItem] = []
     client.execute_removal.side_effect = lambda item, idx, total: removal_calls.append(item)
@@ -513,9 +515,9 @@ def test_run_removal_cycle_calls_get_stalled_for_each_client() -> None:
 
 def test_run_removal_cycle_calls_execute_removal_for_each_allocated_item() -> None:
     """Test that execute_removal is called once per allocated item."""
-    item = QueueItem(1, 10, 'Movie', 'remove', 'no_messages', [])
+    item = QueueItem(1, 10, 'Movie', True, False, False, 'no_messages', [])
     client = _make_mock_client('R', stalled_items=[item])
-    _run_removal_cycle([client], {'no_messages': 'remove', 'batch_size': 10})
+    _run_removal_cycle([client], {'no_messages': {'remove': True}, 'batch_size': 10})
     client.execute_removal.assert_called_once_with(item, 1, 1)
 
 
@@ -528,7 +530,7 @@ def test_run_removal_cycle_skips_execute_when_no_items() -> None:
 
 def test_run_removal_cycle_respects_global_batch_size() -> None:
     """Test that batch_size caps total removals across all clients."""
-    items = [QueueItem(i, i, f'M{i}', 'remove', 'no_messages', []) for i in range(1, 6)]
+    items = [QueueItem(i, i, f'M{i}', True, False, False, 'no_messages', []) for i in range(1, 6)]
     client = _make_mock_client('R', stalled_items=items)
     _run_removal_cycle([client], {'batch_size': 2})
     assert client.execute_removal.call_count == 2
@@ -536,7 +538,7 @@ def test_run_removal_cycle_respects_global_batch_size() -> None:
 
 def test_run_removal_cycle_batch_size_zero_skips_execution() -> None:
     """Test that batch_size=0 skips execute_removal even when items are present."""
-    item = QueueItem(1, 10, 'Movie', 'remove', 'no_messages', [])
+    item = QueueItem(1, 10, 'Movie', True, False, False, 'no_messages', [])
     client = _make_mock_client('R', stalled_items=[item])
     _run_removal_cycle([client], {'batch_size': 0})
     client.execute_removal.assert_not_called()
@@ -544,8 +546,8 @@ def test_run_removal_cycle_batch_size_zero_skips_execution() -> None:
 
 def test_run_removal_cycle_interleave_true_alternates_clients() -> None:
     """Test that interleave_instances=True alternates items between clients."""
-    item_a = QueueItem(1, 1, 'A', 'remove', 'no_messages', [])
-    item_b = QueueItem(2, 2, 'B', 'remove', 'no_messages', [])
+    item_a = QueueItem(1, 1, 'A', True, False, False, 'no_messages', [])
+    item_b = QueueItem(2, 2, 'B', True, False, False, 'no_messages', [])
     ca = _make_mock_client('CA', stalled_items=[item_a])
     cb = _make_mock_client('CB', stalled_items=[item_b])
     ca.weight = 1.0
@@ -558,9 +560,9 @@ def test_run_removal_cycle_interleave_true_alternates_clients() -> None:
 def test_run_removal_cycle_interleave_false_drains_per_client() -> None:
     """Test that interleave_instances=False runs one client's items before the next."""
     calls = []
-    item_a1 = QueueItem(1, 1, 'A1', 'remove', 'no_messages', [])
-    item_a2 = QueueItem(2, 2, 'A2', 'remove', 'no_messages', [])
-    item_b1 = QueueItem(3, 3, 'B1', 'remove', 'no_messages', [])
+    item_a1 = QueueItem(1, 1, 'A1', True, False, False, 'no_messages', [])
+    item_a2 = QueueItem(2, 2, 'A2', True, False, False, 'no_messages', [])
+    item_b1 = QueueItem(3, 3, 'B1', True, False, False, 'no_messages', [])
     ca = _make_mock_client('CA', stalled_items=[item_a1, item_a2])
     cb = _make_mock_client('CB', stalled_items=[item_b1])
     ca.weight = 1.0
@@ -674,11 +676,11 @@ def test_log_killarr_start_shows_unlimited_batch(caplog: Any) -> None:
 
 
 def test_log_killarr_start_shows_handling_actions(caplog: Any) -> None:
-    """Test that _log_killarr_start logs stall category actions."""
+    """Test that _log_killarr_start logs stall category actions in flag format."""
     from killarr.main import _log_killarr_start
 
     with caplog.at_level(logging.INFO):
-        _log_killarr_start([MagicMock()], {'stalled': 'remove'})
+        _log_killarr_start([MagicMock()], {'stalled': {'remove': True}})
     assert 'Handling:' in caplog.text
     assert 'stalled=remove' in caplog.text
 
@@ -980,7 +982,7 @@ def test_run_removal_cycle_staggers_between_items(monkeypatch: Any) -> None:
     """Test that _run_removal_cycle sleeps stagger_interval_seconds between items."""
     sleep_calls: list[float] = []
     monkeypatch.setattr('killarr.main.time.sleep', sleep_calls.append)
-    items = [QueueItem(i, i, f'M{i}', 'remove', 'no_messages', []) for i in range(1, 3)]
+    items = [QueueItem(i, i, f'M{i}', True, False, False, 'no_messages', []) for i in range(1, 3)]
     client = _make_mock_client('R', stalled_items=items)
     _run_removal_cycle([client], {'stagger_interval_seconds': 5, 'batch_size': -1})
     assert sleep_calls == [5]  # one sleep between 2 items, none after last
@@ -990,7 +992,7 @@ def test_run_removal_cycle_no_sleep_after_last_item(monkeypatch: Any) -> None:
     """Test that _run_removal_cycle does not sleep after the final item."""
     sleep_calls: list[float] = []
     monkeypatch.setattr('killarr.main.time.sleep', sleep_calls.append)
-    item = QueueItem(1, 1, 'M1', 'remove', 'no_messages', [])
+    item = QueueItem(1, 1, 'M1', True, False, False, 'no_messages', [])
     client = _make_mock_client('R', stalled_items=[item])
     _run_removal_cycle([client], {'stagger_interval_seconds': 5, 'batch_size': -1})
     assert not sleep_calls  # only one item, no sleep
