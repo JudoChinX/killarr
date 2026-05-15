@@ -296,20 +296,37 @@ Omit a category entirely (or set `remove: false`) to ignore it. The default for 
 
 ```yaml
 killarr:
-  stalled:       {remove: true, blocklist: true, search: true}  # Blocklist and retry generic stalls
-  no_upgrade:    {remove: false}                                 # Leave custom-format blocks alone
-  manual_import: {remove: false}                                 # Leave items needing manual attention
-  no_messages:   {remove: true, search: true}                   # Retry if no specific reason is given
+  stalled:           # Blocklist and retry generic stalls
+    remove: true
+    blocklist: true
+    search: true
+  no_upgrade:        # Leave custom-format blocks alone
+    remove: false
+  manual_import:     # Leave items needing manual attention
+    remove: false
+  no_messages:       # Retry if no specific reason is given
+    remove: true
+    search: true
+```
+
+Both block and inline YAML syntax are accepted — they parse identically:
+
+```yaml
+# Block (recommended)          # Inline (also valid)
+stalled:                        stalled: {remove: true, blocklist: true, search: true}
+  remove: true
+  blocklist: true
+  search: true
 ```
 
 > **Migrating from v0.0.4 or earlier:** The old string actions (`ignore`, `remove`, `retry`, `blocklist`) are no longer supported. Convert each action to the equivalent dict:
 >
-> | Old string | New dict |
-> |---|---|
-> | `ignore` | `{remove: false}` (or omit the key entirely) |
-> | `remove` | `{remove: true}` |
-> | `retry` | `{remove: true, search: true}` |
-> | `blocklist` | `{remove: true, blocklist: true, search: true}` |
+> | Old string | New (block format) | New (inline format) |
+> |---|---|---|
+> | `ignore` | omit the key (or `remove: false`) | `{remove: false}` |
+> | `remove` | `remove: true` | `{remove: true}` |
+> | `retry` | `remove: true`<br>`search: true` | `{remove: true, search: true}` |
+> | `blocklist` | `remove: true`<br>`blocklist: true`<br>`search: true` | `{remove: true, blocklist: true, search: true}` |
 
 ### Instance Settings
 
@@ -363,7 +380,10 @@ Any global `killarr:` setting (including actions) can be overridden for a specif
 ```yaml
 killarr:
   batch_size: 10
-  stalled: {remove: true, blocklist: true, search: true}
+  stalled:
+    remove: true
+    blocklist: true
+    search: true
 
 instances:
   Radarr-Main:
@@ -379,8 +399,9 @@ instances:
     api_key: "key2"
     enabled: true
     killarr:
-      batch_size: 3                  # Override: only remove 3 per cycle for 4K
-      stalled: {remove: true}        # Override: remove but don't blocklist 4K releases
+      batch_size: 3      # Override: only remove 3 per cycle for 4K
+      stalled:           # Override: remove but don't blocklist 4K releases
+        remove: true
 ```
 
 ### Environment Variable-Only Configuration

@@ -29,13 +29,24 @@ killarr:
   # The 'stalled' key is the fallback for any category not explicitly configured.
   # Resolution order: instance override -> global -> stalled -> ignore
   #
-  # stalled:        {remove: true, blocklist: true, search: true}  # Generic stalls (0 peers, no seeds)
-  # no_upgrade:     {remove: false}                                 # "Not a Custom Format upgrade" — safe to leave
-  # manual_import:  {remove: false}                                 # Requires manual intervention
-  # no_files:       {remove: true}                                  # Nothing eligible for import
-  # missing_items:  {remove: true}                                  # Episodes/tracks missing from release
-  # tba_title:      {remove: false}                                 # Episode title not yet announced
-  # dangerous_file: {remove: true, blocklist: true, search: true}  # Fake/malicious releases (.exe, .iso)
+  # stalled:           # Generic stalls (0 peers, no seeds)
+  #   remove: true
+  #   blocklist: true
+  #   search: true
+  # no_upgrade:        # "Not a Custom Format upgrade" — safe to leave
+  #   remove: false
+  # manual_import:     # Requires manual intervention
+  #   remove: false
+  # no_files:          # Nothing eligible for import
+  #   remove: true
+  # missing_items:     # Episodes/tracks missing from release
+  #   remove: true
+  # tba_title:         # Episode title not yet announced
+  #   remove: false
+  # dangerous_file:    # Fake/malicious releases (.exe, .iso)
+  #   remove: true
+  #   blocklist: true
+  #   search: true
 
   # removal_order: api_order    # Item order within a cycle: api_order, age_ascending, age_descending
 
@@ -53,7 +64,8 @@ instances:
     enabled: true
     # killarr:                       # Per-instance Killarr overrides (optional)
     #   batch_size: 5
-    #   no_upgrade: {remove: true}   # Override for this instance
+    #   no_upgrade:                  # Override for this instance
+    #     remove: true
 
   sonarr:
     type: sonarr
