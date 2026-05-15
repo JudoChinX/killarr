@@ -448,9 +448,22 @@ def test_build_arr_clients_uses_global_settings_when_no_override() -> None:
 
 def test_build_arr_clients_merges_instance_stall_category_overrides() -> None:
     """Test that per-instance stall category actions override global category settings."""
-    instances = {'radarr': [{'name': 'R', 'url': 'http://r', 'api_key': 'k', 'weight': 1.0, 'no_upgrade': 'retry'}]}
-    clients = build_arr_clients(instances, {'no_upgrade': 'ignore', 'stalled': 'remove'})
-    assert clients[0].settings['no_upgrade'] == 'retry'
+    instances = {
+        'radarr': [
+            {
+                'name': 'R',
+                'url': 'http://r',
+                'api_key': 'k',
+                'weight': 1.0,
+                'no_upgrade': {'remove': True, 'search': True},
+            }
+        ]
+    }
+    clients = build_arr_clients(
+        instances,
+        {'no_upgrade': {'remove': False}, 'stalled': {'remove': True}},
+    )
+    assert clients[0].settings['no_upgrade'] == {'remove': True, 'search': True}
 
 
 def test_build_arr_clients_handles_multiple_types() -> None:

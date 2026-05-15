@@ -189,9 +189,9 @@ class ArrClient(ABC):
     def _resolve_action(self, category: str) -> dict[str, bool]:
         """Resolve the action flags for a stall category using the config hierarchy."""
         action = self.settings.get(category)
-        if not action and category != 'stalled':
+        if action is None and category != 'stalled':
             action = self.settings.get('stalled')
-        if not action:
+        if action is None:
             action = {}
         return {
             'remove': bool(action.get('remove', False)),

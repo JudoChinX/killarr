@@ -176,6 +176,11 @@ _resolve_action_cases = {
         'category': 'stalled',
         'expected': {'remove': True, 'blocklist': False, 'search': True},
     },
+    'empty_dict_category_does_not_fall_back_to_stalled': {
+        'settings': {'no_upgrade': {}, 'stalled': {'remove': True, 'search': True}},
+        'category': 'no_upgrade',
+        'expected': {'remove': False, 'blocklist': False, 'search': False},
+    },
 }
 
 
@@ -870,3 +875,15 @@ def test_get_stalled_items_added_empty_when_missing_from_record() -> None:
     client.session.get = MagicMock(return_value=mock_queue_response([record]))
     items, _stats = client.get_stalled_items()
     assert items[0].added == ''
+
+
+def test_blocklist_action_without_search_does_not_trigger_search() -> None:
+    """Test that blocklist=True with search=False sends DELETE with blocklist param but no POST."""
+    client = ClientBuilder().radarr().build()
+    client.session.delete = MagicMock(return_value=mock_http_response())
+    client.session.post = MagicMock(return_value=mock_http_response())
+    item = QueueItem(1, 10, 'Movie', True, True, False, 'stalled', [])
+    client.execute_removal(item, 1, 1)
+    params = client.session.delete.call_args.kwargs.get('params', {})
+    assert params.get('blocklist') == 'true'
+    assert not client.session.post.called
