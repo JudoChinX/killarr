@@ -523,6 +523,38 @@ _load_config_from_env_cases = {
             'instances': {'radarr': [{'weight': 1.5}]},
         },
     },
+    'stall_category_json_dict_parsed': {
+        'env_vars': {
+            'KILLARR_GLOBAL_STALLED': '{"remove": true, "blocklist": true, "search": false}',
+            'KILLARR_INSTANCE_0_NAME': 'R',
+            'KILLARR_INSTANCE_0_TYPE': 'radarr',
+            'KILLARR_INSTANCE_0_URL': 'http://r',
+            'KILLARR_INSTANCE_0_API_KEY': 'k',
+        },
+        'expected_result': {
+            'global_settings': {'stalled': {'remove': True, 'blocklist': True, 'search': False}},
+        },
+    },
+    'stall_category_invalid_json_raises': {
+        'env_vars': {
+            'KILLARR_GLOBAL_STALLED': '{remove: true}',
+            'KILLARR_INSTANCE_0_NAME': 'R',
+            'KILLARR_INSTANCE_0_TYPE': 'radarr',
+            'KILLARR_INSTANCE_0_URL': 'http://r',
+            'KILLARR_INSTANCE_0_API_KEY': 'k',
+        },
+        'expected_error': "Invalid JSON for env var value: '{remove: true}'",
+    },
+    'stall_category_plain_string_fails_validation': {
+        'env_vars': {
+            'KILLARR_GLOBAL_STALLED': 'blocklist',
+            'KILLARR_INSTANCE_0_NAME': 'R',
+            'KILLARR_INSTANCE_0_TYPE': 'radarr',
+            'KILLARR_INSTANCE_0_URL': 'http://r',
+            'KILLARR_INSTANCE_0_API_KEY': 'k',
+        },
+        'expected_error': "'killarr.stalled' must be a dict of action flags, got str.",
+    },
 }
 
 
