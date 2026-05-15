@@ -670,19 +670,23 @@ def test_parse_config_with_actions() -> None:
         'instances': {
             'instance_radarr': {'type': 'radarr', 'url': 'http://host', 'api_key': 'test_key', 'enabled': True}
         },
-        'killarr': {'no_upgrade': 'ignore', 'stalled': 'blocklist', 'dangerous_file': 'remove'},
+        'killarr': {
+            'no_upgrade': {},
+            'stalled': {'remove': True, 'blocklist': True},
+            'dangerous_file': {'remove': True},
+        },
     }
     result = parse_config(config)
-    assert result['global_settings']['no_upgrade'] == 'ignore'
-    assert result['global_settings']['stalled'] == 'blocklist'
-    assert result['global_settings']['dangerous_file'] == 'remove'
+    assert result['global_settings']['no_upgrade'] == {}
+    assert result['global_settings']['stalled'] == {'remove': True, 'blocklist': True}
+    assert result['global_settings']['dangerous_file'] == {'remove': True}
 
 
 def test_parse_config_invalid_action() -> None:
-    """Test parse_config raises ValueError when a stall category has an unrecognized action value."""
+    """Test parse_config raises ValueError when a stall category has an invalid action value."""
     config = {
         'instances': {'r': {'type': 'radarr', 'url': 'http://h', 'api_key': 'k', 'enabled': True}},
-        'killarr': {'stalled': 'invalid_action'},
+        'killarr': {'stalled': 'remove'},
     }
-    with pytest.raises(ValueError, match='must be one of'):
+    with pytest.raises(ValueError, match='must be a dict'):
         parse_config(config)
