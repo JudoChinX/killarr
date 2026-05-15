@@ -264,16 +264,19 @@ killarr:
 
 ### Stall Actions
 
-Killarr classifies each stalled item into a category based on its `statusMessages` and performs a named action. Actions can be configured globally under `killarr:` or per instance.
+Killarr classifies each stalled item into a category based on its `statusMessages` and applies a set of granular flags. Actions can be configured globally under `killarr:` or per instance.
 
-#### Valid Actions
+#### Flags
 
-| Action | Description |
+Each stall category maps to a dict with up to three boolean flags:
+
+| Flag | Description |
 |---|---|
-| `ignore` | Skip the item. No action taken. (Default for all categories) |
-| `remove` | Delete from queue and download client. No new search. |
-| `retry` | Delete from queue and download client, then trigger a fresh search. |
-| `blocklist` | Delete from queue/client, add release to blocklist, and trigger fresh search. |
+| `remove` | Delete from queue and download client. Required for `blocklist` or `search` to have any effect. |
+| `blocklist` | Add the release to the \*arr blocklist. Requires `remove: true`. |
+| `search` | Trigger a fresh search after removal. Requires `remove: true`. |
+
+Omit a category entirely (or set `remove: false`) to ignore it. The default for all categories is no action.
 
 #### Stall Categories
 
@@ -293,11 +296,20 @@ Killarr classifies each stalled item into a category based on its `statusMessage
 
 ```yaml
 killarr:
-  stalled: blocklist     # Most stalled items should be blocklisted and retried
-  no_upgrade: remove     # Just remove items that don't improve on existing
-  manual_import: ignore  # Leave items requiring manual intervention alone
-  no_messages: retry     # Retry if no specific reason is given
+  stalled:       {remove: true, blocklist: true, search: true}  # Blocklist and retry generic stalls
+  no_upgrade:    {remove: false}                                 # Leave custom-format blocks alone
+  manual_import: {remove: false}                                 # Leave items needing manual attention
+  no_messages:   {remove: true, search: true}                   # Retry if no specific reason is given
 ```
+
+> **Migrating from v0.0.4 or earlier:** The old string actions (`ignore`, `remove`, `retry`, `blocklist`) are no longer supported. Convert each action to the equivalent dict:
+>
+> | Old string | New dict |
+> |---|---|
+> | `ignore` | `{remove: false}` (or omit the key entirely) |
+> | `remove` | `{remove: true}` |
+> | `retry` | `{remove: true, search: true}` |
+> | `blocklist` | `{remove: true, blocklist: true, search: true}` |
 
 ### Instance Settings
 
@@ -351,7 +363,7 @@ Any global `killarr:` setting (including actions) can be overridden for a specif
 ```yaml
 killarr:
   batch_size: 10
-  stalled: blocklist
+  stalled: {remove: true, blocklist: true, search: true}
 
 instances:
   Radarr-Main:
@@ -359,7 +371,7 @@ instances:
     host: "http://radarr:7878"
     api_key: "key1"
     enabled: true
-    # Uses global defaults: batch_size=10, stalled=blocklist
+    # Uses global defaults: batch_size=10, stalled={remove: true, blocklist: true, search: true}
 
   Radarr-4K:
     type: radarr
@@ -367,8 +379,8 @@ instances:
     api_key: "key2"
     enabled: true
     killarr:
-      batch_size: 3       # Override: only remove 3 per cycle for 4K
-      stalled: remove     # Override: don't blocklist 4K releases, just remove
+      batch_size: 3                  # Override: only remove 3 per cycle for 4K
+      stalled: {remove: true}        # Override: remove but don't blocklist 4K releases
 ```
 
 ### Environment Variable-Only Configuration
@@ -391,15 +403,15 @@ Prefix global settings with `KILLARR_GLOBAL_`.
 | `KILLARR_GLOBAL_RETRY_INTERVAL_MINUTES` | `0` | Per-media cooldown in minutes. `0` disables. |
 | `KILLARR_GLOBAL_INCLUDE_TAGS` | `(none)` | Comma-separated tag names. |
 | `KILLARR_GLOBAL_EXCLUDE_TAGS` | `(none)` | Comma-separated tag names. |
-| `KILLARR_GLOBAL_STALLED` | `ignore` | Action for `stalled` category. |
-| `KILLARR_GLOBAL_NO_UPGRADE` | `ignore` | Action for `no_upgrade` category. |
-| `KILLARR_GLOBAL_MANUAL_IMPORT` | `ignore` | Action for `manual_import` category. |
-| `KILLARR_GLOBAL_NO_FILES` | `ignore` | Action for `no_files` category. |
-| `KILLARR_GLOBAL_MISSING_ITEMS` | `ignore` | Action for `missing_items` category. |
-| `KILLARR_GLOBAL_TBA_TITLE` | `ignore` | Action for `tba_title` category. |
-| `KILLARR_GLOBAL_DANGEROUS_FILE` | `ignore` | Action for `dangerous_file` category. |
-| `KILLARR_GLOBAL_NO_MESSAGES` | `ignore` | Action for `no_messages` category. |
-| `KILLARR_GLOBAL_UNKNOWN` | `ignore` | Action for `unknown` category. |
+| `KILLARR_GLOBAL_STALLED` | `(none)` | Flags for `stalled` category as JSON (e.g. `{"remove":true,"blocklist":true,"search":true}`). |
+| `KILLARR_GLOBAL_NO_UPGRADE` | `(none)` | Flags for `no_upgrade` category. |
+| `KILLARR_GLOBAL_MANUAL_IMPORT` | `(none)` | Flags for `manual_import` category. |
+| `KILLARR_GLOBAL_NO_FILES` | `(none)` | Flags for `no_files` category. |
+| `KILLARR_GLOBAL_MISSING_ITEMS` | `(none)` | Flags for `missing_items` category. |
+| `KILLARR_GLOBAL_TBA_TITLE` | `(none)` | Flags for `tba_title` category. |
+| `KILLARR_GLOBAL_DANGEROUS_FILE` | `(none)` | Flags for `dangerous_file` category. |
+| `KILLARR_GLOBAL_NO_MESSAGES` | `(none)` | Flags for `no_messages` category. |
+| `KILLARR_GLOBAL_UNKNOWN` | `(none)` | Flags for `unknown` category. |
 
 #### Instance Settings
 
