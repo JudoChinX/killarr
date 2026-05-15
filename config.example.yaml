@@ -25,7 +25,7 @@ killarr:
   #   blocklist: Add to *arr blocklist (requires remove: true).
   #   search:    Trigger a fresh search after removal (requires remove: true).
   #
-  # Omit a category (or set remove: false) to ignore it.
+  # Omit a category to ignore it — all flags default to false when not specified.
   # The 'stalled' key is the fallback for any category not explicitly configured.
   # Resolution order: instance override -> global -> stalled -> ignore
   #
@@ -33,16 +33,13 @@ killarr:
   #   remove: true
   #   blocklist: true
   #   search: true
-  # no_upgrade:        # "Not a Custom Format upgrade" — safe to leave
-  #   remove: false
-  # manual_import:     # Requires manual intervention
-  #   remove: false
+  # no_upgrade:        # "Not a Custom Format upgrade" — omit to ignore (default)
+  # manual_import:     # Requires manual intervention — omit to ignore (default)
   # no_files:          # Nothing eligible for import
   #   remove: true
   # missing_items:     # Episodes/tracks missing from release
   #   remove: true
-  # tba_title:         # Episode title not yet announced
-  #   remove: false
+  # tba_title:         # Episode title not yet announced — omit to ignore (default)
   # dangerous_file:    # Fake/malicious releases (.exe, .iso)
   #   remove: true
   #   blocklist: true

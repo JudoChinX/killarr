@@ -276,7 +276,7 @@ Each stall category maps to a dict with up to three boolean flags:
 | `blocklist` | Add the release to the \*arr blocklist. Requires `remove: true`. |
 | `search` | Trigger a fresh search after removal. Requires `remove: true`. |
 
-Omit a category entirely (or set `remove: false`) to ignore it. The default for all categories is no action.
+All flags default to `false` when not specified — omit a category entirely to ignore it, or omit individual flags to leave them off. There is no need to write `remove: false` or `search: false` explicitly.
 
 #### Stall Categories
 
@@ -300,13 +300,10 @@ killarr:
     remove: true
     blocklist: true
     search: true
-  no_upgrade:        # Leave custom-format blocks alone
-    remove: false
-  manual_import:     # Leave items needing manual attention
-    remove: false
   no_messages:       # Retry if no specific reason is given
     remove: true
     search: true
+  # no_upgrade, manual_import, etc. — omitted, so they default to no action
 ```
 
 Both block and inline YAML syntax are accepted — they parse identically:
@@ -323,7 +320,7 @@ stalled:                        stalled: {remove: true, blocklist: true, search:
 >
 > | Old string | New (block format) | New (inline format) |
 > |---|---|---|
-> | `ignore` | omit the key (or `remove: false`) | `{remove: false}` |
+> | `ignore` | omit the key | omit the key |
 > | `remove` | `remove: true` | `{remove: true}` |
 > | `retry` | `remove: true`<br>`search: true` | `{remove: true, search: true}` |
 > | `blocklist` | `remove: true`<br>`blocklist: true`<br>`search: true` | `{remove: true, blocklist: true, search: true}` |
