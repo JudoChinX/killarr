@@ -188,14 +188,10 @@ class ArrClient(ABC):
     def _resolve_action(self, category: str) -> dict[str, bool]:
         """Resolve the action flags for a stall category using the config hierarchy."""
         action = self.settings.get(category)
-        if action is None and category != 'generic':
-            action = self.settings.get('generic')
-
-        # If still None (not in config and 'generic' not in config), or if explicitly {},
-        # it will resolve to all flags being False (ignore).
+        if action is None:
+            action = self.settings.get('default')
         if action is None:
             action = {}
-
         return {key: action.get(key, False) for key in VALID_ACTIONS}
 
     def _resolve_tag_ids(self) -> None:

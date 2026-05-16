@@ -499,7 +499,7 @@ def test_build_arr_clients_merges_instance_stall_category_overrides() -> None:
     }
     clients = build_arr_clients(
         instances,
-        {'no_upgrade': {'remove': False}, 'generic': {'remove': True}},
+        {'no_upgrade': {'remove': False}, 'default': {'remove': True}},
     )
     assert clients[0].settings['no_upgrade'] == {'remove': True, 'search': True}
 
@@ -726,14 +726,23 @@ def test_log_killarr_start_shows_unlimited_batch(caplog: Any) -> None:
     assert 'Unlimited' in caplog.text
 
 
+def test_log_killarr_start_shows_default_in_handling(caplog: Any) -> None:
+    """Test that _log_killarr_start includes default= at the start of the Handling line."""
+    from killarr.main import _log_killarr_start
+
+    with caplog.at_level(logging.INFO):
+        _log_killarr_start([MagicMock()], {'default': {'remove': True, 'blocklist': True, 'search': True}})
+    assert 'Handling: default=remove+blocklist+search' in caplog.text
+
+
 def test_log_killarr_start_shows_handling_actions(caplog: Any) -> None:
     """Test that _log_killarr_start logs stall category actions in flag format."""
     from killarr.main import _log_killarr_start
 
     with caplog.at_level(logging.INFO):
-        _log_killarr_start([MagicMock()], {'generic': {'remove': True}})
+        _log_killarr_start([MagicMock()], {'default': {'remove': True}})
     assert 'Handling:' in caplog.text
-    assert 'generic=remove' in caplog.text
+    assert 'default=remove' in caplog.text
 
 
 def test_log_killarr_start_empty_dict_results_in_ignore(caplog: Any) -> None:
@@ -741,27 +750,27 @@ def test_log_killarr_start_empty_dict_results_in_ignore(caplog: Any) -> None:
     from killarr.main import _log_killarr_start
 
     settings = {
-        'generic': {'remove': True, 'blocklist': True, 'search': True},
+        'default': {'remove': True, 'blocklist': True, 'search': True},
         'no_upgrade': {},
     }
     with caplog.at_level(logging.INFO):
         _log_killarr_start([MagicMock()], settings)
     assert 'no_upgrade=ignore' in caplog.text
-    assert 'generic=remove+blocklist+search' in caplog.text
+    assert 'default=remove+blocklist+search' in caplog.text
 
 
-def test_log_killarr_start_unset_category_falls_back_to_generic(caplog: Any) -> None:
-    """Test that a category missing from config falls back to 'generic' actions in the log."""
+def test_log_killarr_start_unset_category_falls_back_to_default(caplog: Any) -> None:
+    """Test that a category missing from config falls back to 'default' actions in the log."""
     from killarr.main import _log_killarr_start
 
     settings = {
-        'generic': {'remove': True, 'search': True},
+        'default': {'remove': True, 'search': True},
         # manual_import is intentionally missing
     }
     with caplog.at_level(logging.INFO):
         _log_killarr_start([MagicMock()], settings)
     assert 'manual_import=remove+search' in caplog.text
-    assert 'generic=remove+search' in caplog.text
+    assert 'default=remove+search' in caplog.text
 
 
 def test_log_killarr_start_shows_interleave_yes(caplog: Any) -> None:

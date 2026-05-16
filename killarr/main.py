@@ -22,6 +22,7 @@ from killarr.config_parser import load_config
 from killarr.config_parser import load_config_from_env
 from killarr.config_parser import parse_active_hours
 from killarr.validators import SETTINGS_SCHEMA
+from killarr.validators import STALL_ACTION_CONFIG_KEYS
 from killarr.validators import STALL_CATEGORIES
 from killarr.validators import VALID_ACTIONS
 
@@ -187,14 +188,14 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
     retry_str = f'{retry_minutes}m' if retry_minutes > 0 else 'off'
     interleave = _get_setting(settings, 'interleave_instances')
     interleave_str = 'Yes' if interleave else 'No'
-    stall_actions = {}
-    generic_default = settings.get('generic')
+    default_cfg = settings.get('default')
+    stall_actions: dict[str, str] = {'default': _fmt_action(default_cfg)}
     for category in STALL_CATEGORIES:
         action_cfg = settings.get(category)
-        if action_cfg is None and category != 'generic':
-            action_cfg = generic_default
+        if action_cfg is None:
+            action_cfg = default_cfg
         stall_actions[category] = _fmt_action(action_cfg)
-    action_str = ', '.join(f'{category}={action}' for category, action in stall_actions.items())
+    action_str = ', '.join(f'{cat}={act}' for cat, act in stall_actions.items())
 
     _LOGGER.info(
         f'Killarr started{dry_run_str} | '
@@ -295,7 +296,7 @@ def build_arr_clients(
         Flat list of instantiated *arr client objects.
     """
     registry = client_registry if client_registry is not None else _CLIENT_MAP
-    instance_keys = set(SETTINGS_SCHEMA) | set(STALL_CATEGORIES)
+    instance_keys = set(SETTINGS_SCHEMA) | set(STALL_ACTION_CONFIG_KEYS)
     clients: list[ArrClient] = []
     for arr_type, client_class in registry.items():
         for instance in instances_config.get(arr_type, []):

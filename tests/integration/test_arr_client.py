@@ -157,12 +157,12 @@ def test_is_stalled(record: Any, expected: Any) -> None:
 
 _resolve_action_cases = {
     'specific_category_setting_returned': {
-        'settings': {'no_upgrade': {'remove': True}, 'generic': {'remove': True, 'blocklist': True}},
+        'settings': {'no_upgrade': {'remove': True}, 'default': {'remove': True, 'blocklist': True}},
         'category': 'no_upgrade',
         'expected': {'remove': True, 'blocklist': False, 'search': False},
     },
-    'unset_category_falls_back_to_generic': {
-        'settings': {'generic': {'remove': True, 'blocklist': True}},
+    'unset_category_falls_back_to_default': {
+        'settings': {'default': {'remove': True, 'blocklist': True}},
         'category': 'no_upgrade',
         'expected': {'remove': True, 'blocklist': True, 'search': False},
     },
@@ -176,8 +176,13 @@ _resolve_action_cases = {
         'category': 'generic',
         'expected': {'remove': True, 'blocklist': False, 'search': True},
     },
-    'empty_dict_category_does_not_fall_back_to_generic': {
-        'settings': {'no_upgrade': {}, 'generic': {'remove': True, 'search': True}},
+    'generic_falls_back_to_default_when_not_set': {
+        'settings': {'default': {'remove': True, 'blocklist': True}},
+        'category': 'generic',
+        'expected': {'remove': True, 'blocklist': True, 'search': False},
+    },
+    'empty_dict_category_does_not_fall_back_to_default': {
+        'settings': {'no_upgrade': {}, 'default': {'remove': True, 'search': True}},
         'category': 'no_upgrade',
         'expected': {'remove': False, 'blocklist': False, 'search': False},
     },
@@ -277,7 +282,7 @@ def test_get_stalled_items_returns_queue_item_with_all_fields() -> None:
 
 def test_get_stalled_items_skips_ignored_items() -> None:
     """Test that items whose action has remove=False are excluded from results."""
-    client = ClientBuilder().radarr().with_settings(generic={'remove': False}).build()
+    client = ClientBuilder().radarr().with_settings(default={'remove': False}).build()
     records = [RadarrQueueBuilder().warning().with_id(1).build()]
     client.session.get = MagicMock(return_value=mock_queue_response(records))
     items, skip_stats = client.get_stalled_items()
