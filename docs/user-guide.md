@@ -24,6 +24,9 @@ Complete guide to installing, configuring, and operating Killarr.
 - [Operational Best Practices](#operational-best-practices)
 - [Troubleshooting](#troubleshooting)
 - [Development Setup](#development-setup)
+- [Upgrading](#upgrading)
+  - [v0.0.5 — Action flags](#v005--action-flags)
+  - [v0.0.6 — Config key renames](#v006--config-key-renames)
 
 ---
 
@@ -567,6 +570,109 @@ The container runs as UID 65532 (`nonroot`). The config file must be world-reada
 
 ```bash
 chmod 644 config.yaml
+```
+
+---
+
+## Upgrading
+
+---
+
+### v0.0.5 — Action flags
+
+Stall actions changed from a single string value to granular boolean flags.
+
+**Before (v0.0.4 and earlier):**
+
+```yaml
+killarr:
+  no_upgrade: ignore
+  manual_import: remove
+  no_files: retry
+  generic: blocklist
+```
+
+**After (v0.0.5+):**
+
+```yaml
+killarr:
+  # ignore — omit the key entirely, or set it to an empty dict
+  manual_import: {}
+
+  # remove — remove from queue, no blocklist, no search
+  no_upgrade:
+    remove: true
+
+  # retry — remove and trigger a fresh search
+  no_files:
+    remove: true
+    search: true
+
+  # blocklist — remove, blocklist the release, and search for a replacement
+  generic:
+    remove: true
+    blocklist: true
+    search: true
+```
+
+---
+
+### v0.0.6 — Config key renames
+
+Two config keys changed. Update your config in place — no other settings are affected.
+
+**1. Rename `stalled` to `generic`**
+
+```yaml
+# Before
+killarr:
+  stalled:
+    remove: true
+    blocklist: true
+    search: true
+
+# After
+killarr:
+  generic:
+    remove: true
+    blocklist: true
+    search: true
+```
+
+**2. Use `default` for the universal fallback**
+
+In v0.0.5, `generic` served dual duty: it classified transient stall patterns *and* acted as the fallback for all other unset categories. Those roles are now split.
+
+If you relied on `generic` to catch everything, add a `default` key:
+
+```yaml
+# Before — generic caught all unset categories
+killarr:
+  generic:
+    remove: true
+    blocklist: true
+    search: true
+
+# After — generic classifies transient stalls; default catches everything else
+killarr:
+  default:
+    remove: true
+    blocklist: true
+    search: true
+  generic:
+    remove: true
+    blocklist: true
+    search: true
+```
+
+If your `generic` config was only ever meant as a catch-all (you didn't specifically want transient stalls handled differently), you can simplify to just `default` and omit `generic`:
+
+```yaml
+killarr:
+  default:
+    remove: true
+    blocklist: true
+    search: true
 ```
 
 ---

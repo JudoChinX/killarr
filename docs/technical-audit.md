@@ -47,7 +47,7 @@ To be absolutely clear, Killarr does not and will never:
 
 ## Architecture Overview
 
-Killarr is a ~1,255-line Python service with five core modules:
+Killarr is a ~1,325-line Python service with five core modules:
 
 ```
 killarr/
@@ -68,11 +68,11 @@ Each cycle:
 1. Fetch the full queue from each \*arr instance (paginated)
 2. Filter client-side for `trackedDownloadStatus == "warning"`
 3. Pass status messages to `classifier.py` to categorise the stall reason
-4. Resolve the named action (`ignore`, `remove`, `retry`, `blocklist`) based on configuration
+4. Resolve action flags (`remove`, `blocklist`, `search`) for each stall category based on configuration
 5. Apply tag filtering (include/exclude) and batch size limits
 6. Sort actionable items by `removal_order` setting (`api_order`, `age_ascending`, `age_descending`)
 7. DELETE each stalled item (with optional `removeFromClient` and `blocklist` params)
-8. POST a search command for each removed item (if action is `retry` or `blocklist`)
+8. POST a search command for each removed item (if `search: true`)
 9. Sleep for `interval` seconds and repeat
 
 ---
@@ -138,7 +138,7 @@ Each cycle:
 - `LidarrClient`: Lidarr-specific implementation (v1 endpoints, `albumId`, `AlbumSearch` command).
 
 **Key Methods:**
-- `get_stalled_items()`: Fetches the full queue, filters for stalled items, classifies them via `classifier.py`, and applies tag filtering and batch limits. Returns a tuple of `(actionable_items, skip_stats)` where each `QueueItem` carries `queue_id`, `media_id`, `title`, `action`, `category`, `messages`, and `added` (ISO 8601 timestamp from the \*arr API).
+- `get_stalled_items()`: Fetches the full queue, filters for stalled items, classifies them via `classifier.py`, and applies tag filtering and batch limits. Returns a tuple of `(actionable_items, skip_stats)` where each `QueueItem` carries `queue_id`, `media_id`, `title`, `remove`, `blocklist`, `search`, `category`, `messages`, and `added` (ISO 8601 timestamp from the \*arr API).
 - `_fetch_all_queue()`: Paginates through the \*arr queue endpoint until all records are retrieved.
 - `_is_stalled()`: Returns `True` if `trackedDownloadStatus == "warning"`.
 - `execute_removal()`: Removes a single queue item by delegating to `_remove_single()`.
@@ -204,8 +204,14 @@ DELETE and POST requests are the only write operations. Both are guarded by the 
 
 ```python
 def _remove_single(self, item: QueueItem, index: int, total: int) -> None:
+    parts = ['remove']
+    if item.blocklist:
+        parts.append('blocklist')
+    if item.search:
+        parts.append('search')
+    action_label = '+'.join(parts)
     if self.dry_run:
-        _LOGGER.info(f'[{self.name}] [DRY RUN] Would {item.action} ({item.category}): {item.title} ({index}/{total})')
+        _LOGGER.info(f'[{self.name}] [DRY RUN] Would {action_label} ({item.category}): {item.title} ({index}/{total})')
         return
     # ... DELETE request
 ```
@@ -225,7 +231,7 @@ Killarr operates entirely within your local network:
 
 ### 1. Security Through Simplicity
 
-**Decision:** ~1,255 lines of core Python code, zero external dependencies beyond `requests` and `PyYAML`.
+**Decision:** ~1,325 lines of core Python code, zero external dependencies beyond `requests` and `PyYAML`.
 
 **Why:** Small codebases are auditable. Every line of code is a potential attack surface. By keeping the codebase minimal, security reviewers can read and understand the entire project in under an hour.
 
@@ -245,7 +251,7 @@ Killarr operates entirely within your local network:
 
 ### 4. Test Coverage as Documentation
 
-**Decision:** 288 tests covering all code paths including error conditions.
+**Decision:** 321 tests covering all code paths including error conditions.
 
 **Why:** Tests serve three purposes:
 1. Prevent regressions.
@@ -302,7 +308,7 @@ Every line of AI-generated code was reviewed, tested, and validated against requ
 
 ## Testing Strategy
 
-**Test Coverage:** 288 tests, 99.39% coverage.
+**Test Coverage:** 321 tests, 99.43% coverage.
 
 - `tests/unit/test_config_parser.py`: Configuration validation, schema defaults, shared config, env var mode — no network calls.
 - `tests/unit/test_validators.py`: Schema validation and setting constraints — no network calls.
@@ -338,14 +344,14 @@ Development (see `requirements-dev.txt`):
 
 ## File Sizes
 
-- `killarr/main.py`: 349 lines
+- `killarr/main.py`: 376 lines
 - `killarr/classifier.py`: 87 lines
-- `killarr/config_parser.py`: 248 lines
-- `killarr/validators.py`: 171 lines
-- `killarr/clients/arr.py`: 398 lines
+- `killarr/config_parser.py`: 254 lines
+- `killarr/validators.py`: 185 lines
+- `killarr/clients/arr.py`: 421 lines
 - `killarr/__init__.py`: 1 line (package marker)
 - `killarr/clients/__init__.py`: 1 line (package marker)
-- **Total:** ~1,255 lines of Python
+- **Total:** ~1,325 lines of Python
 
 The small codebase size makes comprehensive security auditing feasible.
 
@@ -356,7 +362,7 @@ The small codebase size makes comprehensive security auditing feasible.
 Don't trust documentation — verify the claims:
 
 1. **Run the tests:** `pytest` — see that security-relevant code is tested.
-2. **Read the code:** Start with `killarr/main.py` — 349 lines.
+2. **Read the code:** Start with `killarr/main.py` — 376 lines.
 3. **Check the API calls:** Enable `LOG_LEVEL=DEBUG` — every HTTP request and detailed skip reasons are logged.
 4. **Observe the cycle:** Look for cycle summaries in the logs (`Found X items to remove (Evaluated: Y, Skipped: Z)`) to confirm operation.
 5. **Review dependencies:** `cat requirements.txt` — two libraries, both standard.

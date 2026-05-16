@@ -8,7 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [0.0.6] - 2026-05-16
+
+### Breaking Changes
+
+- The `stalled` config key has been renamed to `generic`. Rename any `stalled:` entries in your config to `generic:`. (#25)
+- The `generic` key no longer acts as the universal fallback. If you relied on `generic:` to catch all unset categories, add a `default:` key with the same flags alongside it. (#26)
+
+### Changed
+
+- The `generic` category now classifies transient stall patterns exclusively (locked by another process, qBittorrent downloading metadata, no seeders). (#25)
+- Introduced `default` as the universal stall action fallback. All unset categories — including `generic` — fall back to `default`. This separates classification (`generic`) from fallback configuration (`default`). (#26)
+
+### Fixed
+
+- Explicit empty dicts (e.g. `no_upgrade: {}`) now correctly produce `ignore` and do not inherit the fallback. (#25)
+
+
 ## [0.0.5] - 2026-05-16
+
+### Breaking Changes
+
+- Stall action config values have changed from strings (`remove`, `blocklist`, `retry`, `ignore`) to granular boolean flags. Replace each action string with explicit flags — e.g. `blocklist` becomes `remove: true` + `blocklist: true` + `search: true`.
 
 ### Changed
 
