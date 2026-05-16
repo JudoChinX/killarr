@@ -188,10 +188,14 @@ class ArrClient(ABC):
     def _resolve_action(self, category: str) -> dict[str, bool]:
         """Resolve the action flags for a stall category using the config hierarchy."""
         action = self.settings.get(category)
-        if action is None and category != 'stalled':
-            action = self.settings.get('stalled')
+        if action is None and category != 'generic':
+            action = self.settings.get('generic')
+
+        # If still None (not in config and 'generic' not in config), or if explicitly {},
+        # it will resolve to all flags being False (ignore).
         if action is None:
             action = {}
+
         return {key: action.get(key, False) for key in VALID_ACTIONS}
 
     def _resolve_tag_ids(self) -> None:
@@ -244,6 +248,16 @@ class ArrClient(ABC):
             return True
         except requests.RequestException:
             return False
+
+    def execute_removal(self, item: QueueItem, index: int, total: int) -> None:
+        """Remove a single queue item.
+
+        Args:
+            item: The QueueItem to remove.
+            index: 1-based position in the global removal queue.
+            total: Total items in the global removal queue.
+        """
+        self._remove_single(item, index, total)
 
     def get_stalled_items(self) -> tuple[list[QueueItem], dict[str, int]]:
         """Fetch the queue, classify each stalled item, and return actionable items and skip stats.
@@ -327,16 +341,6 @@ class ArrClient(ABC):
                 break
 
         return items, skip_stats
-
-    def execute_removal(self, item: QueueItem, index: int, total: int) -> None:
-        """Remove a single queue item.
-
-        Args:
-            item: The QueueItem to remove.
-            index: 1-based position in the global removal queue.
-            total: Total items in the global removal queue.
-        """
-        self._remove_single(item, index, total)
 
 
 class LidarrClient(ArrClient):

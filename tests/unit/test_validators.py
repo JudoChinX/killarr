@@ -174,43 +174,43 @@ def test_validate_removal_order(settings: Any, expected_value: Any, expect_error
 
 _validate_stall_action_settings_cases = {
     'string_value_raises': {
-        'settings': {'stalled': 'remove'},
+        'settings': {'generic': 'remove'},
         'expect_error': True,
     },
     'valid_dict_remove_only': {
-        'settings': {'stalled': {'remove': True}},
+        'settings': {'generic': {'remove': True}},
         'expect_error': False,
     },
     'valid_dict_all_flags': {
-        'settings': {'stalled': {'remove': True, 'blocklist': True, 'search': False}},
+        'settings': {'generic': {'remove': True, 'blocklist': True, 'search': False}},
         'expect_error': False,
     },
     'empty_dict_passes': {
-        'settings': {'stalled': {}},
+        'settings': {'generic': {}},
         'expect_error': False,
     },
     'unknown_key_raises': {
-        'settings': {'stalled': {'remove': True, 'purge': True}},
+        'settings': {'generic': {'remove': True, 'purge': True}},
         'expect_error': True,
     },
     'non_bool_value_raises': {
-        'settings': {'stalled': {'remove': 'yes'}},
+        'settings': {'generic': {'remove': 'yes'}},
         'expect_error': True,
     },
     'blocklist_without_remove_raises': {
-        'settings': {'stalled': {'blocklist': True}},
+        'settings': {'generic': {'blocklist': True}},
         'expect_error': True,
     },
     'search_without_remove_raises': {
-        'settings': {'stalled': {'search': True}},
+        'settings': {'generic': {'search': True}},
         'expect_error': True,
     },
     'all_three_enabled_passes': {
-        'settings': {'stalled': {'remove': True, 'blocklist': True, 'search': True}},
+        'settings': {'generic': {'remove': True, 'blocklist': True, 'search': True}},
         'expect_error': False,
     },
     'blocklist_with_remove_false_raises': {
-        'settings': {'stalled': {'remove': False, 'blocklist': True}},
+        'settings': {'generic': {'remove': False, 'blocklist': True}},
         'expect_error': True,
     },
     'unrelated_key_ignored': {

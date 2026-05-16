@@ -57,9 +57,9 @@ def test_client_warns_on_non_https_url(caplog: Any) -> None:
 
 def test_resolve_tag_ids_maps_names_to_ids() -> None:
     """Test that include_tags names are resolved to tag IDs from the *arr API."""
-    tags = [{'id': 1, 'label': 'stalled'}, {'id': 2, 'label': 'active'}]
+    tags = [{'id': 1, 'label': 'generic'}, {'id': 2, 'label': 'active'}]
     with patch('requests.Session.get', return_value=mock_tag_response(tags)):
-        client = ClientBuilder().with_settings(include_tags=['stalled']).build()
+        client = ClientBuilder().with_settings(include_tags=['generic']).build()
     assert 1 in client._include_tag_ids
 
 
@@ -83,7 +83,7 @@ def test_tag_resolution_network_error_logs_error(caplog: Any) -> None:
     """Test that a network error during tag fetch is logged and tag sets remain empty."""
     with caplog.at_level(logging.ERROR):
         with patch('requests.Session.get', side_effect=requests.exceptions.ConnectionError('down')):
-            client = ClientBuilder().with_settings(include_tags=['stalled']).build()
+            client = ClientBuilder().with_settings(include_tags=['generic']).build()
     assert 'Failed to fetch tags' in caplog.text
     assert client._include_tag_ids == set()
 
@@ -157,12 +157,12 @@ def test_is_stalled(record: Any, expected: Any) -> None:
 
 _resolve_action_cases = {
     'specific_category_setting_returned': {
-        'settings': {'no_upgrade': {'remove': True}, 'stalled': {'remove': True, 'blocklist': True}},
+        'settings': {'no_upgrade': {'remove': True}, 'generic': {'remove': True, 'blocklist': True}},
         'category': 'no_upgrade',
         'expected': {'remove': True, 'blocklist': False, 'search': False},
     },
-    'unset_category_falls_back_to_stalled': {
-        'settings': {'stalled': {'remove': True, 'blocklist': True}},
+    'unset_category_falls_back_to_generic': {
+        'settings': {'generic': {'remove': True, 'blocklist': True}},
         'category': 'no_upgrade',
         'expected': {'remove': True, 'blocklist': True, 'search': False},
     },
@@ -171,13 +171,13 @@ _resolve_action_cases = {
         'category': 'no_upgrade',
         'expected': {'remove': False, 'blocklist': False, 'search': False},
     },
-    'stalled_category_uses_its_own_setting': {
-        'settings': {'stalled': {'remove': True, 'search': True}},
-        'category': 'stalled',
+    'generic_category_uses_its_own_setting': {
+        'settings': {'generic': {'remove': True, 'search': True}},
+        'category': 'generic',
         'expected': {'remove': True, 'blocklist': False, 'search': True},
     },
-    'empty_dict_category_does_not_fall_back_to_stalled': {
-        'settings': {'no_upgrade': {}, 'stalled': {'remove': True, 'search': True}},
+    'empty_dict_category_does_not_fall_back_to_generic': {
+        'settings': {'no_upgrade': {}, 'generic': {'remove': True, 'search': True}},
         'category': 'no_upgrade',
         'expected': {'remove': False, 'blocklist': False, 'search': False},
     },
@@ -277,7 +277,7 @@ def test_get_stalled_items_returns_queue_item_with_all_fields() -> None:
 
 def test_get_stalled_items_skips_ignored_items() -> None:
     """Test that items whose action has remove=False are excluded from results."""
-    client = ClientBuilder().radarr().with_settings(stalled={'remove': False}).build()
+    client = ClientBuilder().radarr().with_settings(generic={'remove': False}).build()
     records = [RadarrQueueBuilder().warning().with_id(1).build()]
     client.session.get = MagicMock(return_value=mock_queue_response(records))
     items, skip_stats = client.get_stalled_items()
@@ -362,7 +362,7 @@ def test_get_stalled_items_counts_not_stalled() -> None:
 
 def test_get_stalled_items_logs_debug_for_ignored(caplog: Any) -> None:
     """Test that a DEBUG log is emitted when a stalled item's action has remove=False."""
-    client = ClientBuilder().radarr().with_settings(stalled={'remove': False}).build()
+    client = ClientBuilder().radarr().with_settings(generic={'remove': False}).build()
     records = [
         RadarrQueueBuilder()
         .warning()
@@ -374,7 +374,7 @@ def test_get_stalled_items_logs_debug_for_ignored(caplog: Any) -> None:
     client.session.get = MagicMock(return_value=mock_queue_response(records))
     with caplog.at_level(logging.DEBUG):
         client.get_stalled_items()
-    assert 'Skipping stalled item (remove=false, category: stalled)' in caplog.text
+    assert 'Skipping stalled item (remove=false, category: generic)' in caplog.text
     assert 'Ignored.Movie.mkv' in caplog.text
 
 
@@ -384,8 +384,8 @@ def test_execute_removal_calls_delete() -> None:
     client.session.delete = MagicMock(return_value=mock_http_response())
     client.session.post = MagicMock(return_value=mock_http_response())
     items = [
-        QueueItem(1, 10, 'Movie A', True, False, False, 'stalled', []),
-        QueueItem(2, 20, 'Movie B', True, False, False, 'stalled', []),
+        QueueItem(1, 10, 'Movie A', True, False, False, 'generic', []),
+        QueueItem(2, 20, 'Movie B', True, False, False, 'generic', []),
     ]
     for index, item in enumerate(items, start=1):
         client.execute_removal(item, index, len(items))
@@ -396,7 +396,7 @@ def test_remove_action_always_sends_remove_from_client() -> None:
     """Test that removeFromClient=true is always sent for non-ignore actions."""
     client = ClientBuilder().radarr().build()
     client.session.delete = MagicMock(return_value=mock_http_response())
-    item = QueueItem(1, 10, 'Movie', True, False, False, 'stalled', [])
+    item = QueueItem(1, 10, 'Movie', True, False, False, 'generic', [])
     client.execute_removal(item, 1, 1)
     params = client.session.delete.call_args.kwargs.get('params', {})
     assert params.get('removeFromClient') == 'true'
@@ -407,7 +407,7 @@ def test_blocklist_action_sends_blocklist_param() -> None:
     client = ClientBuilder().radarr().build()
     client.session.delete = MagicMock(return_value=mock_http_response())
     client.session.post = MagicMock(return_value=mock_http_response())
-    item = QueueItem(1, 10, 'Movie', True, True, True, 'stalled', [])
+    item = QueueItem(1, 10, 'Movie', True, True, True, 'generic', [])
     client.execute_removal(item, 1, 1)
     params = client.session.delete.call_args.kwargs.get('params', {})
     assert params.get('blocklist') == 'true'
@@ -417,7 +417,7 @@ def test_remove_action_omits_blocklist_param() -> None:
     """Test that blocklist param is absent when blocklist flag is False."""
     client = ClientBuilder().radarr().build()
     client.session.delete = MagicMock(return_value=mock_http_response())
-    item = QueueItem(1, 10, 'Movie', True, False, False, 'stalled', [])
+    item = QueueItem(1, 10, 'Movie', True, False, False, 'generic', [])
     client.execute_removal(item, 1, 1)
     params = client.session.delete.call_args.kwargs.get('params', {})
     assert 'blocklist' not in params
@@ -428,7 +428,7 @@ def test_search_flag_triggers_search() -> None:
     client = ClientBuilder().radarr().build()
     client.session.delete = MagicMock(return_value=mock_http_response())
     client.session.post = MagicMock(return_value=mock_http_response())
-    item = QueueItem(1, 10, 'Movie', True, False, True, 'stalled', [])
+    item = QueueItem(1, 10, 'Movie', True, False, True, 'generic', [])
     client.execute_removal(item, 1, 1)
     assert client.session.post.called
     payload = client.session.post.call_args.kwargs.get('json', {})
@@ -441,7 +441,7 @@ def test_blocklist_flag_triggers_search_when_search_also_set() -> None:
     client = ClientBuilder().radarr().build()
     client.session.delete = MagicMock(return_value=mock_http_response())
     client.session.post = MagicMock(return_value=mock_http_response())
-    item = QueueItem(1, 10, 'Movie', True, True, True, 'stalled', [])
+    item = QueueItem(1, 10, 'Movie', True, True, True, 'generic', [])
     client.execute_removal(item, 1, 1)
     assert client.session.post.called
 
@@ -451,7 +451,7 @@ def test_search_false_skips_search() -> None:
     client = ClientBuilder().radarr().build()
     client.session.delete = MagicMock(return_value=mock_http_response())
     client.session.post = MagicMock(return_value=mock_http_response())
-    item = QueueItem(1, 10, 'Movie', True, False, False, 'stalled', [])
+    item = QueueItem(1, 10, 'Movie', True, False, False, 'generic', [])
     client.execute_removal(item, 1, 1)
     assert not client.session.post.called
 
@@ -462,7 +462,7 @@ def test_execute_removal_search_failure_logs_warning(caplog: Any) -> None:
     client.session.delete = MagicMock(return_value=mock_http_response())
     client.session.post = MagicMock(side_effect=requests.exceptions.ConnectionError('down'))
     with caplog.at_level(logging.WARNING):
-        item = QueueItem(1, 10, 'Movie', True, False, True, 'stalled', [])
+        item = QueueItem(1, 10, 'Movie', True, False, True, 'generic', [])
         client.execute_removal(item, 1, 1)
     assert 'WARNING' in caplog.text or 'warning' in caplog.text.lower()
 
@@ -473,7 +473,7 @@ def test_execute_removal_delete_failure_logs_error(caplog: Any) -> None:
     client.session.delete = MagicMock(side_effect=requests.exceptions.ConnectionError('down'))
     client.session.post = MagicMock(return_value=mock_http_response())
     with caplog.at_level(logging.ERROR):
-        item = QueueItem(1, 10, 'Movie', True, False, True, 'stalled', [])
+        item = QueueItem(1, 10, 'Movie', True, False, True, 'generic', [])
         client.execute_removal(item, 1, 1)
     assert 'Failed to remove' in caplog.text
     assert not client.session.post.called
@@ -485,7 +485,7 @@ def test_execute_removal_404_logs_cascade(caplog: Any) -> None:
     client.session.delete = MagicMock(return_value=mock_http_response(status_code=404))
     client.session.post = MagicMock(return_value=mock_http_response())
     with caplog.at_level(logging.INFO):
-        item = QueueItem(1, 10, 'Movie', True, True, True, 'stalled', [])
+        item = QueueItem(1, 10, 'Movie', True, True, True, 'generic', [])
         client.execute_removal(item, 1, 1)
     assert 'cascade' in caplog.text
     assert 'Failed to remove' not in caplog.text
@@ -497,7 +497,7 @@ def test_execute_removal_dry_run_skips_delete() -> None:
     client = ClientBuilder().radarr().with_settings(dry_run=True).build()
     client.session.delete = MagicMock()
     client.session.post = MagicMock()
-    item = QueueItem(1, 10, 'Movie', True, False, True, 'stalled', [])
+    item = QueueItem(1, 10, 'Movie', True, False, True, 'generic', [])
     client.execute_removal(item, 1, 1)
     assert not client.session.delete.called
     assert not client.session.post.called
@@ -507,18 +507,18 @@ def test_execute_removal_dry_run_logs_would_remove(caplog: Any) -> None:
     """Test that dry_run mode logs a DRY RUN message with the item title and action label."""
     client = ClientBuilder().radarr().with_settings(dry_run=True).build()
     with caplog.at_level(logging.INFO):
-        item = QueueItem(1, 10, 'Test Movie', True, False, True, 'stalled', [])
+        item = QueueItem(1, 10, 'Test Movie', True, False, True, 'generic', [])
         client.execute_removal(item, 1, 1)
     assert 'DRY RUN' in caplog.text
     assert 'Test Movie' in caplog.text
-    assert 'remove+search (stalled)' in caplog.text
+    assert 'remove+search (generic)' in caplog.text
 
 
 def test_execute_removal_delete_url_contains_queue_id() -> None:
     """Test that the DELETE URL includes the queue item ID."""
     client = ClientBuilder().radarr().build()
     client.session.delete = MagicMock(return_value=mock_http_response())
-    item = QueueItem(99, 10, 'Movie', True, False, False, 'stalled', [])
+    item = QueueItem(99, 10, 'Movie', True, False, False, 'generic', [])
     client.execute_removal(item, 1, 1)
     call_url = client.session.delete.call_args.args[0]
     assert '/queue/99' in call_url
@@ -528,7 +528,7 @@ def test_execute_removal_logs_stall_details_at_debug(caplog: Any) -> None:
     """Test that _remove_single logs stall details at DEBUG level before attempting removal."""
     client = ClientBuilder().radarr().build()
     client.session.delete = MagicMock(return_value=mock_http_response())
-    item = QueueItem(1, 10, 'Details Test', True, False, False, 'stalled', ['Deep detail 1', 'Deep detail 2'])
+    item = QueueItem(1, 10, 'Details Test', True, False, False, 'generic', ['Deep detail 1', 'Deep detail 2'])
     with caplog.at_level(logging.DEBUG):
         client._remove_single(item, 1, 1)
     assert 'Stall details for "Details Test"' in caplog.text
@@ -812,7 +812,7 @@ def test_remove_single_records_retry_interval_on_success() -> None:
     """Test that a successful DELETE records the media ID in _retry_state."""
     client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120).build()
     client.session.delete = MagicMock(return_value=mock_http_response())
-    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', True, False, False, 'stalled', []), 1, 1)
+    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', True, False, False, 'generic', []), 1, 1)
     assert 10 in client._retry_state
 
 
@@ -820,7 +820,7 @@ def test_remove_single_records_retry_interval_on_404() -> None:
     """Test that a 404 (cascade) DELETE still records the media ID in _retry_state."""
     client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120).build()
     client.session.delete = MagicMock(return_value=mock_http_response(status_code=404))
-    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', True, False, False, 'stalled', []), 1, 1)
+    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', True, False, False, 'generic', []), 1, 1)
     assert 10 in client._retry_state
 
 
@@ -828,7 +828,7 @@ def test_remove_single_does_not_record_retry_interval_on_failure() -> None:
     """Test that a failed DELETE does not record anything in _retry_state."""
     client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120).build()
     client.session.delete = MagicMock(side_effect=requests.exceptions.ConnectionError('down'))
-    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', True, False, False, 'stalled', []), 1, 1)
+    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', True, False, False, 'generic', []), 1, 1)
     assert client._retry_state == {}
 
 
@@ -836,7 +836,7 @@ def test_remove_single_dry_run_does_not_record_retry_interval() -> None:
     """Test that dry_run=True does not record anything in _retry_state."""
     client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120, dry_run=True).build()
     client.session.delete = MagicMock()
-    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', True, False, False, 'stalled', []), 1, 1)
+    client._remove_single(QueueItem(1, 10, 'Test.Movie.mkv', True, False, False, 'generic', []), 1, 1)
     assert client._retry_state == {}
 
 
@@ -882,7 +882,7 @@ def test_blocklist_action_without_search_does_not_trigger_search() -> None:
     client = ClientBuilder().radarr().build()
     client.session.delete = MagicMock(return_value=mock_http_response())
     client.session.post = MagicMock(return_value=mock_http_response())
-    item = QueueItem(1, 10, 'Movie', True, True, False, 'stalled', [])
+    item = QueueItem(1, 10, 'Movie', True, True, False, 'generic', [])
     client.execute_removal(item, 1, 1)
     params = client.session.delete.call_args.kwargs.get('params', {})
     assert params.get('blocklist') == 'true'

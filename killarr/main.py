@@ -125,6 +125,27 @@ def _is_within_active_hours(start: datetime.time, end: datetime.time, now: datet
     return now >= start or now < end
 
 
+def _load_initial_config() -> dict | None:
+    """Determine config source and load configuration."""
+    config_source = os.environ.get('KILLARR_CONFIG_SOURCE', 'file').lower()
+    config = None
+    if config_source == 'env':
+        _LOGGER.info('Loading configuration from environment variables.')
+        try:
+            config = load_config_from_env()
+        except ValueError as error:
+            _LOGGER.error(f'Configuration error from environment: {error}')
+    else:
+        if config_source != 'file':
+            _LOGGER.warning(
+                f"Unrecognized KILLARR_CONFIG_SOURCE value '{config_source}'. "
+                "Expected 'file' or 'env'. Falling back to file mode."
+            )
+        config = _load_config_from_paths(['config/config.yaml', 'config.yaml'])
+
+    return config
+
+
 def _load_config_from_paths(config_paths: list[str]) -> dict | None:
     """Attempt to load configuration from a list of possible file paths."""
     config = None
@@ -166,9 +187,13 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
     retry_str = f'{retry_minutes}m' if retry_minutes > 0 else 'off'
     interleave = _get_setting(settings, 'interleave_instances')
     interleave_str = 'Yes' if interleave else 'No'
-    stall_actions = {
-        category: _fmt_action(settings.get(category, settings.get('stalled'))) for category in STALL_CATEGORIES
-    }
+    stall_actions = {}
+    generic_default = settings.get('generic')
+    for category in STALL_CATEGORIES:
+        action_cfg = settings.get(category)
+        if action_cfg is None and category != 'generic':
+            action_cfg = generic_default
+        stall_actions[category] = _fmt_action(action_cfg)
     action_str = ', '.join(f'{category}={action}' for category, action in stall_actions.items())
 
     _LOGGER.info(
@@ -182,6 +207,26 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
         f'Interleave: {interleave_str} | '
         f'Handling: {action_str}'
     )
+
+
+def _main_loop(active_clients: list[ArrClient], settings: dict) -> None:
+    """Run the removal loop until termination."""
+    run_interval_seconds = _get_setting(settings, 'interval')
+    active_hours = _get_setting(settings, 'active_hours')
+    parsed_window = parse_active_hours(active_hours) if active_hours else None
+
+    while True:
+        if parsed_window:
+            start_time, end_time = parsed_window
+            now = datetime.datetime.now().time()
+            if not _is_within_active_hours(start_time, end_time, now):
+                secs = _seconds_until_window_open(start_time, now)
+                _LOGGER.info(f'Outside active hours ({active_hours}). Sleeping {secs}s until window opens.')
+                time.sleep(secs)
+                continue
+        _run_removal_cycle(active_clients, settings)
+        _LOGGER.info(f'--- Cycle complete. Sleeping for {run_interval_seconds}s. ---')
+        time.sleep(run_interval_seconds)
 
 
 def _run_removal_cycle(active_clients: list[Any], settings: dict) -> None:
@@ -213,7 +258,7 @@ def _run_removal_cycle(active_clients: list[Any], settings: dict) -> None:
         per_client: dict = {}
         for client, item in queue:
             per_client.setdefault(client, []).append(item)
-        queue = [(c, item) for c in active_clients for item in per_client.get(c, [])]
+        queue = [(client, item) for client in active_clients for item in per_client.get(client, [])]
 
     total = len(queue)
     _LOGGER.info(f'Removing {total} item(s){_calculate_eta(total, stagger)}.')
@@ -270,55 +315,27 @@ def build_arr_clients(
 
 def run() -> None:
     """Load configuration and start the removal loop."""
-    config_source = os.environ.get('KILLARR_CONFIG_SOURCE', 'file').lower()
-    if config_source == 'env':
-        _LOGGER.info('Loading configuration from environment variables.')
-        try:
-            config = load_config_from_env()
-        except ValueError as error:
-            _LOGGER.error(f'Configuration error from environment: {error}')
-            config = None
-    else:
-        if config_source != 'file':
-            _LOGGER.warning(
-                f"Unrecognized KILLARR_CONFIG_SOURCE value '{config_source}'. "
-                "Expected 'file' or 'env'. Falling back to file mode."
-            )
-        config = _load_config_from_paths(['config/config.yaml', 'config.yaml'])
+    config = _load_initial_config()
+    active_clients = []
 
-    if not config:
+    if config:
+        settings = config.get('global_settings', {})
+        active_clients = build_arr_clients(config.get('instances', {}), settings)
+
+        if not active_clients:
+            _LOGGER.warning("No *arr instances are configured. Add at least one entry under 'instances' to begin.")
+        else:
+            active_clients = verify_arr_clients(active_clients)
+            if not active_clients:
+                _LOGGER.error(
+                    'All configured *arr instances failed to connect. Check network connectivity and instance URLs.'
+                )
+            else:
+                _log_killarr_start(active_clients, settings)
+                _main_loop(active_clients, settings)
+
+    if not config or not active_clients:
         sys.exit(1)
-
-    settings = config.get('global_settings', {})
-    active_clients = build_arr_clients(config.get('instances', {}), settings)
-
-    if not active_clients:
-        _LOGGER.warning("No *arr instances are configured. Add at least one entry under 'instances' to begin.")
-        sys.exit(1)
-
-    active_clients = verify_arr_clients(active_clients)
-    if not active_clients:
-        _LOGGER.error('All configured *arr instances failed to connect. Check network connectivity and instance URLs.')
-        sys.exit(1)
-
-    _log_killarr_start(active_clients, settings)
-
-    run_interval_seconds = _get_setting(settings, 'interval')
-    active_hours = _get_setting(settings, 'active_hours')
-    parsed_window = parse_active_hours(active_hours) if active_hours else None
-
-    while True:
-        if parsed_window:
-            start_time, end_time = parsed_window
-            now = datetime.datetime.now().time()
-            if not _is_within_active_hours(start_time, end_time, now):
-                secs = _seconds_until_window_open(start_time, now)
-                _LOGGER.info(f'Outside active hours ({active_hours}). Sleeping {secs}s until window opens.')
-                time.sleep(secs)
-                continue
-        _run_removal_cycle(active_clients, settings)
-        _LOGGER.info(f'--- Cycle complete. Sleeping for {run_interval_seconds}s. ---')
-        time.sleep(run_interval_seconds)
 
 
 def verify_arr_clients(clients: list[ArrClient]) -> list[ArrClient]:

@@ -262,7 +262,7 @@ def _make_item(queue_id: int, added: str) -> QueueItem:
         remove=True,
         blocklist=False,
         search=False,
-        category='stalled',
+        category='generic',
         messages=[],
         added=added,
     )
@@ -312,8 +312,8 @@ def test_apply_removal_order(clients: Any, order: Any) -> None:
 
 def test_run_removal_cycle_applies_removal_order_before_removal() -> None:
     """Test that _run_removal_cycle calls execute_removal in age_ascending order."""
-    old_item = QueueItem(1, 1, 'Old', True, False, False, 'stalled', [], '2024-01-01T00:00:00Z')
-    new_item = QueueItem(2, 2, 'New', True, False, False, 'stalled', [], '2024-06-01T00:00:00Z')
+    old_item = QueueItem(1, 1, 'Old', True, False, False, 'generic', [], '2024-01-01T00:00:00Z')
+    new_item = QueueItem(2, 2, 'New', True, False, False, 'generic', [], '2024-06-01T00:00:00Z')
     client = _make_mock_client('R', stalled_items=[new_item, old_item])
     removal_calls: list[QueueItem] = []
     client.execute_removal.side_effect = lambda item, idx, total: removal_calls.append(item)
@@ -499,7 +499,7 @@ def test_build_arr_clients_merges_instance_stall_category_overrides() -> None:
     }
     clients = build_arr_clients(
         instances,
-        {'no_upgrade': {'remove': False}, 'stalled': {'remove': True}},
+        {'no_upgrade': {'remove': False}, 'generic': {'remove': True}},
     )
     assert clients[0].settings['no_upgrade'] == {'remove': True, 'search': True}
 
@@ -731,9 +731,37 @@ def test_log_killarr_start_shows_handling_actions(caplog: Any) -> None:
     from killarr.main import _log_killarr_start
 
     with caplog.at_level(logging.INFO):
-        _log_killarr_start([MagicMock()], {'stalled': {'remove': True}})
+        _log_killarr_start([MagicMock()], {'generic': {'remove': True}})
     assert 'Handling:' in caplog.text
-    assert 'stalled=remove' in caplog.text
+    assert 'generic=remove' in caplog.text
+
+
+def test_log_killarr_start_empty_dict_results_in_ignore(caplog: Any) -> None:
+    """Test that an explicit empty dict in config results in 'ignore' in the startup log."""
+    from killarr.main import _log_killarr_start
+
+    settings = {
+        'generic': {'remove': True, 'blocklist': True, 'search': True},
+        'no_upgrade': {},
+    }
+    with caplog.at_level(logging.INFO):
+        _log_killarr_start([MagicMock()], settings)
+    assert 'no_upgrade=ignore' in caplog.text
+    assert 'generic=remove+blocklist+search' in caplog.text
+
+
+def test_log_killarr_start_unset_category_falls_back_to_generic(caplog: Any) -> None:
+    """Test that a category missing from config falls back to 'generic' actions in the log."""
+    from killarr.main import _log_killarr_start
+
+    settings = {
+        'generic': {'remove': True, 'search': True},
+        # manual_import is intentionally missing
+    }
+    with caplog.at_level(logging.INFO):
+        _log_killarr_start([MagicMock()], settings)
+    assert 'manual_import=remove+search' in caplog.text
+    assert 'generic=remove+search' in caplog.text
 
 
 def test_log_killarr_start_shows_interleave_yes(caplog: Any) -> None:

@@ -52,7 +52,7 @@
 ## Key Features
 
 - **Stall Detection:** Identifies downloads stuck in a warning state via `trackedDownloadStatus`.
-- **Stall Classification:** Inspects `statusMessages` to categorise each stall into one of nine categories: `no_upgrade`, `manual_import`, `no_files`, `missing_items`, `tba_title`, `dangerous_file`, `no_messages`, `unknown`, or the generic `stalled` fallback.
+- **Stall Classification:** Inspects `statusMessages` to categorise each stall into one of nine categories: `no_upgrade`, `manual_import`, `no_files`, `missing_items`, `tba_title`, `dangerous_file`, `generic`, `no_messages`, or `unknown`.
 - **Granular Stall Actions:** Assign `remove`, `blocklist`, and `search` flags per stall category — globally or per instance — for precise control over each stall type.
 - **Batch Size Controls:** Limit removals per cycle (`0` = disabled, `-1` = unlimited, `N` = global cap across all instances).
 - **Weighted Round-Robin Allocation:** Distribute the batch budget across instances by weight; interleave items from different instances or drain one at a time.
@@ -100,7 +100,7 @@ The fastest way to get started is with Docker Compose.
 killarr:
   interval: 3600    # Run every hour
   dry_run: true     # Start in dry run mode — no removals until you're satisfied
-  stalled:
+  generic:
     remove: true
     blocklist: true
     search: true
