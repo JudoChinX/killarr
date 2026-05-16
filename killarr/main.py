@@ -23,6 +23,7 @@ from killarr.config_parser import load_config_from_env
 from killarr.config_parser import parse_active_hours
 from killarr.validators import SETTINGS_SCHEMA
 from killarr.validators import STALL_CATEGORIES
+from killarr.validators import VALID_ACTIONS
 
 if 'TZ' not in os.environ:
     os.environ['TZ'] = 'UTC'
@@ -97,6 +98,14 @@ def _calculate_eta(item_count: int, stagger_seconds: int) -> str:
     return result
 
 
+def _fmt_action(value: dict[str, bool] | None) -> str:
+    """Format a stall action setting value as a human-readable flag string."""
+    if value:
+        flags = [action for action in VALID_ACTIONS if value.get(action)]
+        return '+'.join(flags) if flags else 'ignore'
+    return 'ignore'
+
+
 def _format_cycle_info(client_name: str, item_count: int, skip_stats: dict[str, int]) -> str:
     """Format cycle processing info message with counts."""
     total_eval = skip_stats['total_evaluated']
@@ -158,7 +167,7 @@ def _log_killarr_start(active_clients: list[Any], settings: dict) -> None:
     interleave = _get_setting(settings, 'interleave_instances')
     interleave_str = 'Yes' if interleave else 'No'
     stall_actions = {
-        category: settings.get(category, settings.get('stalled', 'ignore')) for category in STALL_CATEGORIES
+        category: _fmt_action(settings.get(category, settings.get('stalled'))) for category in STALL_CATEGORIES
     }
     action_str = ', '.join(f'{category}={action}' for category, action in stall_actions.items())
 
