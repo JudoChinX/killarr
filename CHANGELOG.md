@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [0.0.5] - 2026-05-16
+
+### Changed
+
+- Replace string stall actions with granular remove/blocklist/search flags.
+
+
 ## [0.0.4] - 2026-05-13
 
 ### Added
