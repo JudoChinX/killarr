@@ -256,12 +256,12 @@ _parse_config_cases = {
                     'host': 'http://r',
                     'api_key': 'k',
                     'enabled': True,
-                    'killarr': {'stalled': {'remove': True, 'blocklist': False}},
+                    'killarr': {'generic': {'remove': True, 'blocklist': False}},
                 }
             },
         ),
         'expected_result': {
-            'instances': {'radarr': [{'stalled': {'remove': True, 'blocklist': False}}]},
+            'instances': {'radarr': [{'generic': {'remove': True, 'blocklist': False}}]},
         },
     },
 }
@@ -426,7 +426,7 @@ def test_load_config_empty_yaml(tmp_path: Any) -> None:
 
 def test_expand_env_vars_in_list(tmp_path: Any, monkeypatch: Any) -> None:
     """Test load_config expands ${VAR} placeholders inside YAML list values."""
-    monkeypatch.setenv('TAG_ONE', 'stalled')
+    monkeypatch.setenv('TAG_ONE', 'generic')
     cfg = tmp_path / 'config.yaml'
     cfg.write_text(
         textwrap.dedent("""
@@ -442,7 +442,7 @@ def test_expand_env_vars_in_list(tmp_path: Any, monkeypatch: Any) -> None:
     """)
     )
     result = load_config(str(cfg))
-    assert result['global_settings']['include_tags'] == ['stalled']
+    assert result['global_settings']['include_tags'] == ['generic']
 
 
 # --- load_config_from_env ---
@@ -517,14 +517,14 @@ _load_config_from_env_cases = {
     },
     'list_type_global': {
         'env_vars': {
-            'KILLARR_GLOBAL_INCLUDE_TAGS': 'stalled,broken',
+            'KILLARR_GLOBAL_INCLUDE_TAGS': 'generic,broken',
             'KILLARR_INSTANCE_0_NAME': 'R',
             'KILLARR_INSTANCE_0_TYPE': 'radarr',
             'KILLARR_INSTANCE_0_URL': 'http://r',
             'KILLARR_INSTANCE_0_API_KEY': 'k',
         },
         'expected_result': {
-            'global_settings': {'include_tags': ['stalled', 'broken']},
+            'global_settings': {'include_tags': ['generic', 'broken']},
         },
     },
     'float_weight_parsed': {
@@ -541,19 +541,19 @@ _load_config_from_env_cases = {
     },
     'stall_category_json_dict_parsed': {
         'env_vars': {
-            'KILLARR_GLOBAL_STALLED': '{"remove": true, "blocklist": true, "search": false}',
+            'KILLARR_GLOBAL_GENERIC': '{"remove": true, "blocklist": true, "search": false}',
             'KILLARR_INSTANCE_0_NAME': 'R',
             'KILLARR_INSTANCE_0_TYPE': 'radarr',
             'KILLARR_INSTANCE_0_URL': 'http://r',
             'KILLARR_INSTANCE_0_API_KEY': 'k',
         },
         'expected_result': {
-            'global_settings': {'stalled': {'remove': True, 'blocklist': True, 'search': False}},
+            'global_settings': {'generic': {'remove': True, 'blocklist': True, 'search': False}},
         },
     },
     'stall_category_invalid_json_raises': {
         'env_vars': {
-            'KILLARR_GLOBAL_STALLED': '{remove: true}',
+            'KILLARR_GLOBAL_GENERIC': '{remove: true}',
             'KILLARR_INSTANCE_0_NAME': 'R',
             'KILLARR_INSTANCE_0_TYPE': 'radarr',
             'KILLARR_INSTANCE_0_URL': 'http://r',
@@ -563,13 +563,13 @@ _load_config_from_env_cases = {
     },
     'stall_category_plain_string_fails_validation': {
         'env_vars': {
-            'KILLARR_GLOBAL_STALLED': 'blocklist',
+            'KILLARR_GLOBAL_GENERIC': 'blocklist',
             'KILLARR_INSTANCE_0_NAME': 'R',
             'KILLARR_INSTANCE_0_TYPE': 'radarr',
             'KILLARR_INSTANCE_0_URL': 'http://r',
             'KILLARR_INSTANCE_0_API_KEY': 'k',
         },
-        'expected_error': "'killarr.stalled' must be a dict of action flags, got str.",
+        'expected_error': "'killarr.generic' must be a dict of action flags, got str.",
     },
 }
 
@@ -720,13 +720,13 @@ def test_parse_config_with_actions() -> None:
         },
         'killarr': {
             'no_upgrade': {},
-            'stalled': {'remove': True, 'blocklist': True},
+            'generic': {'remove': True, 'blocklist': True},
             'dangerous_file': {'remove': True},
         },
     }
     result = parse_config(config)
     assert result['global_settings']['no_upgrade'] == {}
-    assert result['global_settings']['stalled'] == {'remove': True, 'blocklist': True}
+    assert result['global_settings']['generic'] == {'remove': True, 'blocklist': True}
     assert result['global_settings']['dangerous_file'] == {'remove': True}
 
 
@@ -734,7 +734,7 @@ def test_parse_config_invalid_action() -> None:
     """Test parse_config raises ValueError when a stall category has an invalid action value."""
     config = {
         'instances': {'r': {'type': 'radarr', 'url': 'http://h', 'api_key': 'k', 'enabled': True}},
-        'killarr': {'stalled': 'remove'},
+        'killarr': {'generic': 'remove'},
     }
     with pytest.raises(ValueError, match='must be a dict'):
         parse_config(config)

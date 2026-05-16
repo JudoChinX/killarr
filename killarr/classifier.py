@@ -10,7 +10,7 @@ class StallCategory(StrEnum):
     MANUAL_IMPORT = 'manual_import'
     NO_FILES = 'no_files'
     NO_UPGRADE = 'no_upgrade'
-    STALLED = 'stalled'
+    GENERIC = 'generic'
     MISSING_ITEMS = 'missing_items'
     TBA_TITLE = 'tba_title'
     NO_MESSAGES = 'no_messages'
@@ -52,7 +52,7 @@ _CATEGORY_MAP: dict[StallCategory, list[str]] = {
         'not a custom format upgrade',
         'not an upgrade for existing',
     ],
-    StallCategory.STALLED: [
+    StallCategory.GENERIC: [
         'is locked by another process',
         'qbittorrent is downloading metadata',
         'the download is stalled with no',
@@ -75,7 +75,7 @@ def classify(messages: list[str]) -> str:
 
     Returns:
         One of 'no_upgrade', 'manual_import', 'no_files', 'missing_items', 'tba_title',
-        'stalled', 'no_messages', 'dangerous_file', or 'unknown'.
+        'generic', 'no_messages', 'dangerous_file', or 'unknown'.
     """
     if not messages:
         return str(StallCategory.NO_MESSAGES)
