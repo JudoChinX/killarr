@@ -8,6 +8,7 @@ import pytest
 from killarr.validators import SETTINGS_SCHEMA
 from killarr.validators import _validate_active_hours
 from killarr.validators import validate_global_settings
+from killarr.validators import validate_stall_action_settings
 
 _validate_active_hours_cases = {
     'valid_same_day': {
@@ -169,3 +170,65 @@ def test_validate_removal_order(settings: Any, expected_value: Any, expect_error
     else:
         validate_global_settings(settings_copy, SETTINGS_SCHEMA)
         assert settings_copy['removal_order'] == expected_value
+
+
+_validate_stall_action_settings_cases = {
+    'string_value_raises': {
+        'settings': {'stalled': 'remove'},
+        'expect_error': True,
+    },
+    'valid_dict_remove_only': {
+        'settings': {'stalled': {'remove': True}},
+        'expect_error': False,
+    },
+    'valid_dict_all_flags': {
+        'settings': {'stalled': {'remove': True, 'blocklist': True, 'search': False}},
+        'expect_error': False,
+    },
+    'empty_dict_passes': {
+        'settings': {'stalled': {}},
+        'expect_error': False,
+    },
+    'unknown_key_raises': {
+        'settings': {'stalled': {'remove': True, 'purge': True}},
+        'expect_error': True,
+    },
+    'non_bool_value_raises': {
+        'settings': {'stalled': {'remove': 'yes'}},
+        'expect_error': True,
+    },
+    'blocklist_without_remove_raises': {
+        'settings': {'stalled': {'blocklist': True}},
+        'expect_error': True,
+    },
+    'search_without_remove_raises': {
+        'settings': {'stalled': {'search': True}},
+        'expect_error': True,
+    },
+    'all_three_enabled_passes': {
+        'settings': {'stalled': {'remove': True, 'blocklist': True, 'search': True}},
+        'expect_error': False,
+    },
+    'blocklist_with_remove_false_raises': {
+        'settings': {'stalled': {'remove': False, 'blocklist': True}},
+        'expect_error': True,
+    },
+    'unrelated_key_ignored': {
+        'settings': {'not_a_category': 'whatever'},
+        'expect_error': False,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'settings, expect_error',
+    [(case['settings'], case['expect_error']) for case in _validate_stall_action_settings_cases.values()],
+    ids=list(_validate_stall_action_settings_cases.keys()),
+)
+def test_validate_stall_action_settings(settings: Any, expect_error: bool) -> None:
+    """Test that validate_stall_action_settings enforces dict-based action flags."""
+    if expect_error:
+        with pytest.raises(ValueError):
+            validate_stall_action_settings(settings)
+    else:
+        validate_stall_action_settings(settings)

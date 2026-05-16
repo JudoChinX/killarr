@@ -6,7 +6,7 @@ from typing import Any
 
 from killarr.classifier import StallCategory
 
-VALID_ACTIONS = ('ignore', 'remove', 'retry', 'blocklist')
+VALID_ACTIONS = ('remove', 'blocklist', 'search')
 VALID_ARR_TYPES = ('radarr', 'sonarr', 'lidarr')
 STALL_CATEGORIES = tuple(category.value for category in StallCategory)
 
@@ -167,5 +167,18 @@ def validate_stall_action_settings(settings: dict) -> None:
         ValueError: If an action value is invalid.
     """
     for category in STALL_CATEGORIES:
-        if category in settings:
-            _validate_setting(category, settings[category], str, choices=VALID_ACTIONS)
+        if category not in settings:
+            continue
+        value = settings[category]
+        if not isinstance(value, dict):
+            raise ValueError(f"'killarr.{category}' must be a dict of action flags, got {type(value).__name__}.")
+        for key, flag in value.items():
+            if key not in VALID_ACTIONS:
+                valid = ', '.join(repr(action) for action in VALID_ACTIONS)
+                raise ValueError(f"'killarr.{category}' contains unknown flag '{key}'. Valid flags: {valid}.")
+            if not isinstance(flag, bool):
+                raise ValueError(f"'killarr.{category}.{key}' must be a bool, got {type(flag).__name__}.")
+        if value.get('blocklist') is True and value.get('remove') is not True:
+            raise ValueError(f"'killarr.{category}.blocklist' requires 'remove' to also be True.")
+        if value.get('search') is True and value.get('remove') is not True:
+            raise ValueError(f"'killarr.{category}.search' requires 'remove' to also be True.")

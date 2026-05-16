@@ -1,6 +1,7 @@
 """Configuration loader and validator for Killarr."""
 
 import datetime
+import json
 import logging
 import os
 import re
@@ -43,7 +44,12 @@ def _expand_env_vars(obj: Any) -> Any:
 
 
 def _parse_env_value(value: str) -> Any:
-    """Convert an environment string value to bool, int, float, or string."""
+    """Convert an environment string value to bool, int, float, dict, or string."""
+    if value.startswith('{'):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f'Invalid JSON for env var value: {value!r}') from exc
     val_lower = value.lower()
     result: Any = value
     if val_lower == 'true':

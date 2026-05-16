@@ -17,9 +17,9 @@ from killarr.clients.arr import QueueItem
 from killarr.clients.arr import RadarrClient
 from killarr.clients.arr import SonarrClient
 from killarr.config_parser import load_config
-from killarr.main import _allocate_slots
 from killarr.main import _apply_removal_order
 from killarr.main import _calculate_eta
+from killarr.main import _fmt_action
 from killarr.main import _format_cycle_info
 from killarr.main import _get_setting
 from killarr.main import _is_within_active_hours
@@ -64,6 +64,44 @@ _calculate_eta_cases = {
 def test_calculate_eta(item_count: Any, stagger_seconds: Any, expected: Any) -> None:
     """Test that _calculate_eta returns the correct ETA string."""
     assert _calculate_eta(item_count, stagger_seconds) == expected
+
+
+_fmt_action_cases = {
+    'none_returns_ignore': {
+        'value': None,
+        'expected': 'ignore',
+    },
+    'empty_dict_returns_ignore': {
+        'value': {},
+        'expected': 'ignore',
+    },
+    'remove_only': {
+        'value': {'remove': True},
+        'expected': 'remove',
+    },
+    'remove_and_blocklist': {
+        'value': {'remove': True, 'blocklist': True},
+        'expected': 'remove+blocklist',
+    },
+    'remove_and_search': {
+        'value': {'remove': True, 'search': True},
+        'expected': 'remove+search',
+    },
+    'all_flags': {
+        'value': {'remove': True, 'blocklist': True, 'search': True},
+        'expected': 'remove+blocklist+search',
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'value, expected',
+    [(case['value'], case['expected']) for case in _fmt_action_cases.values()],
+    ids=list(_fmt_action_cases.keys()),
+)
+def test_fmt_action(value: Any, expected: Any) -> None:
+    """Test that _fmt_action returns the correct human-readable flag string."""
+    assert _fmt_action(value) == expected
 
 
 _format_cycle_info_cases = {
@@ -221,7 +259,9 @@ def _make_item(queue_id: int, added: str) -> QueueItem:
         queue_id=queue_id,
         media_id=queue_id,
         title=f'Item{queue_id}',
-        action='remove',
+        remove=True,
+        blocklist=False,
+        search=False,
         category='stalled',
         messages=[],
         added=added,
@@ -272,8 +312,8 @@ def test_apply_removal_order(clients: Any, order: Any) -> None:
 
 def test_run_removal_cycle_applies_removal_order_before_removal() -> None:
     """Test that _run_removal_cycle calls execute_removal in age_ascending order."""
-    old_item = QueueItem(1, 1, 'Old', 'remove', 'stalled', [], '2024-01-01T00:00:00Z')
-    new_item = QueueItem(2, 2, 'New', 'remove', 'stalled', [], '2024-06-01T00:00:00Z')
+    old_item = QueueItem(1, 1, 'Old', True, False, False, 'stalled', [], '2024-01-01T00:00:00Z')
+    new_item = QueueItem(2, 2, 'New', True, False, False, 'stalled', [], '2024-06-01T00:00:00Z')
     client = _make_mock_client('R', stalled_items=[new_item, old_item])
     removal_calls: list[QueueItem] = []
     client.execute_removal.side_effect = lambda item, idx, total: removal_calls.append(item)
@@ -446,9 +486,22 @@ def test_build_arr_clients_uses_global_settings_when_no_override() -> None:
 
 def test_build_arr_clients_merges_instance_stall_category_overrides() -> None:
     """Test that per-instance stall category actions override global category settings."""
-    instances = {'radarr': [{'name': 'R', 'url': 'http://r', 'api_key': 'k', 'weight': 1.0, 'no_upgrade': 'retry'}]}
-    clients = build_arr_clients(instances, {'no_upgrade': 'ignore', 'stalled': 'remove'})
-    assert clients[0].settings['no_upgrade'] == 'retry'
+    instances = {
+        'radarr': [
+            {
+                'name': 'R',
+                'url': 'http://r',
+                'api_key': 'k',
+                'weight': 1.0,
+                'no_upgrade': {'remove': True, 'search': True},
+            }
+        ]
+    }
+    clients = build_arr_clients(
+        instances,
+        {'no_upgrade': {'remove': False}, 'stalled': {'remove': True}},
+    )
+    assert clients[0].settings['no_upgrade'] == {'remove': True, 'search': True}
 
 
 def test_build_arr_clients_handles_multiple_types() -> None:
@@ -513,9 +566,9 @@ def test_run_removal_cycle_calls_get_stalled_for_each_client() -> None:
 
 def test_run_removal_cycle_calls_execute_removal_for_each_allocated_item() -> None:
     """Test that execute_removal is called once per allocated item."""
-    item = QueueItem(1, 10, 'Movie', 'remove', 'no_messages', [])
+    item = QueueItem(1, 10, 'Movie', True, False, False, 'no_messages', [])
     client = _make_mock_client('R', stalled_items=[item])
-    _run_removal_cycle([client], {'no_messages': 'remove', 'batch_size': 10})
+    _run_removal_cycle([client], {'no_messages': {'remove': True}, 'batch_size': 10})
     client.execute_removal.assert_called_once_with(item, 1, 1)
 
 
@@ -528,7 +581,7 @@ def test_run_removal_cycle_skips_execute_when_no_items() -> None:
 
 def test_run_removal_cycle_respects_global_batch_size() -> None:
     """Test that batch_size caps total removals across all clients."""
-    items = [QueueItem(i, i, f'M{i}', 'remove', 'no_messages', []) for i in range(1, 6)]
+    items = [QueueItem(i, i, f'M{i}', True, False, False, 'no_messages', []) for i in range(1, 6)]
     client = _make_mock_client('R', stalled_items=items)
     _run_removal_cycle([client], {'batch_size': 2})
     assert client.execute_removal.call_count == 2
@@ -536,7 +589,7 @@ def test_run_removal_cycle_respects_global_batch_size() -> None:
 
 def test_run_removal_cycle_batch_size_zero_skips_execution() -> None:
     """Test that batch_size=0 skips execute_removal even when items are present."""
-    item = QueueItem(1, 10, 'Movie', 'remove', 'no_messages', [])
+    item = QueueItem(1, 10, 'Movie', True, False, False, 'no_messages', [])
     client = _make_mock_client('R', stalled_items=[item])
     _run_removal_cycle([client], {'batch_size': 0})
     client.execute_removal.assert_not_called()
@@ -544,30 +597,30 @@ def test_run_removal_cycle_batch_size_zero_skips_execution() -> None:
 
 def test_run_removal_cycle_interleave_true_alternates_clients() -> None:
     """Test that interleave_instances=True alternates items between clients."""
-    item_a = QueueItem(1, 1, 'A', 'remove', 'no_messages', [])
-    item_b = QueueItem(2, 2, 'B', 'remove', 'no_messages', [])
-    ca = _make_mock_client('CA', stalled_items=[item_a])
-    cb = _make_mock_client('CB', stalled_items=[item_b])
-    ca.weight = 1.0
-    cb.weight = 1.0
-    _run_removal_cycle([ca, cb], {'interleave_instances': True, 'batch_size': -1})
-    ca.execute_removal.assert_called_once()
-    cb.execute_removal.assert_called_once()
+    item_a = QueueItem(1, 1, 'A', True, False, False, 'no_messages', [])
+    item_b = QueueItem(2, 2, 'B', True, False, False, 'no_messages', [])
+    client_a = _make_mock_client('CA', stalled_items=[item_a])
+    client_b = _make_mock_client('CB', stalled_items=[item_b])
+    client_a.weight = 1.0
+    client_b.weight = 1.0
+    _run_removal_cycle([client_a, client_b], {'interleave_instances': True, 'batch_size': -1})
+    client_a.execute_removal.assert_called_once()
+    client_b.execute_removal.assert_called_once()
 
 
 def test_run_removal_cycle_interleave_false_drains_per_client() -> None:
     """Test that interleave_instances=False runs one client's items before the next."""
     calls = []
-    item_a1 = QueueItem(1, 1, 'A1', 'remove', 'no_messages', [])
-    item_a2 = QueueItem(2, 2, 'A2', 'remove', 'no_messages', [])
-    item_b1 = QueueItem(3, 3, 'B1', 'remove', 'no_messages', [])
-    ca = _make_mock_client('CA', stalled_items=[item_a1, item_a2])
-    cb = _make_mock_client('CB', stalled_items=[item_b1])
-    ca.weight = 1.0
-    cb.weight = 1.0
-    ca.execute_removal.side_effect = lambda item, i, t: calls.append(('CA', item))
-    cb.execute_removal.side_effect = lambda item, i, t: calls.append(('CB', item))
-    _run_removal_cycle([ca, cb], {'interleave_instances': False, 'batch_size': -1})
+    item_a1 = QueueItem(1, 1, 'A1', True, False, False, 'no_messages', [])
+    item_a2 = QueueItem(2, 2, 'A2', True, False, False, 'no_messages', [])
+    item_b1 = QueueItem(3, 3, 'B1', True, False, False, 'no_messages', [])
+    client_a = _make_mock_client('CA', stalled_items=[item_a1, item_a2])
+    client_b = _make_mock_client('CB', stalled_items=[item_b1])
+    client_a.weight = 1.0
+    client_b.weight = 1.0
+    client_a.execute_removal.side_effect = lambda item, index, total: calls.append(('CA', item))
+    client_b.execute_removal.side_effect = lambda item, index, total: calls.append(('CB', item))
+    _run_removal_cycle([client_a, client_b], {'interleave_instances': False, 'batch_size': -1})
     assert calls[0][0] == 'CA'
     assert calls[1][0] == 'CA'
     assert calls[2][0] == 'CB'
@@ -674,11 +727,11 @@ def test_log_killarr_start_shows_unlimited_batch(caplog: Any) -> None:
 
 
 def test_log_killarr_start_shows_handling_actions(caplog: Any) -> None:
-    """Test that _log_killarr_start logs stall category actions."""
+    """Test that _log_killarr_start logs stall category actions in flag format."""
     from killarr.main import _log_killarr_start
 
     with caplog.at_level(logging.INFO):
-        _log_killarr_start([MagicMock()], {'stalled': 'remove'})
+        _log_killarr_start([MagicMock()], {'stalled': {'remove': True}})
     assert 'Handling:' in caplog.text
     assert 'stalled=remove' in caplog.text
 
@@ -887,100 +940,11 @@ def test_run_exits_when_all_verification_fails() -> None:
     assert exc_info.value.code == 1
 
 
-def _make_client_with_weight(name: str, weight: float = 1.0) -> MagicMock:
-    """Create a minimal mock client with name and weight set."""
-    client = MagicMock()
-    client.name = name
-    client.weight = weight
-    return client
-
-
-_allocate_slots_cases = {
-    'limit_zero_returns_empty': {
-        'limit': 0,
-        'backlogs': {'a': ['i1', 'i2']},
-        'expected_count': 0,
-    },
-    'empty_backlogs_returns_empty': {
-        'limit': 10,
-        'backlogs': {},
-        'expected_count': 0,
-    },
-    'single_client_respects_limit': {
-        'limit': 2,
-        'backlogs': {'a': ['i1', 'i2', 'i3']},
-        'expected_count': 2,
-    },
-    'unlimited_returns_all': {
-        'limit': -1,
-        'backlogs': {'a': ['i1', 'i2', 'i3']},
-        'expected_count': 3,
-    },
-}
-
-
-@pytest.mark.parametrize(
-    'limit, backlogs, expected_count',
-    [(case['limit'], case['backlogs'], case['expected_count']) for case in _allocate_slots_cases.values()],
-    ids=list(_allocate_slots_cases.keys()),
-)
-def test_allocate_slots_basic(limit: Any, backlogs: Any, expected_count: Any) -> None:
-    """Test basic _allocate_slots behaviour for limits and empty inputs."""
-    clients = {_make_client_with_weight(k): v for k, v in backlogs.items()}
-    result = _allocate_slots(limit, clients)
-    assert len(result) == expected_count
-
-
-def test_allocate_slots_round_robins_two_clients() -> None:
-    """Test that _allocate_slots alternates items between two equal-weight clients."""
-    ca = _make_client_with_weight('A', weight=1.0)
-    cb = _make_client_with_weight('B', weight=1.0)
-    result = _allocate_slots(4, {ca: ['a1', 'a2'], cb: ['b1', 'b2']})
-    clients_in_order = [r[0] for r in result]
-    # With equal weight, should alternate: A B A B (or B A B A)
-    assert clients_in_order[0] != clients_in_order[1]
-    assert clients_in_order[1] != clients_in_order[2]
-    assert clients_in_order[2] != clients_in_order[3]
-
-
-def test_allocate_slots_higher_weight_gets_more_turns() -> None:
-    """Test that a client with weight=2 gets twice as many items per round as weight=1."""
-    ca = _make_client_with_weight('A', weight=2.0)
-    cb = _make_client_with_weight('B', weight=1.0)
-    # A gets 2 turns, B gets 1 turn per round — with 6 total slots: A=4, B=2
-    result = _allocate_slots(6, {ca: ['a1', 'a2', 'a3', 'a4'], cb: ['b1', 'b2']})
-    a_count = sum(1 for client, _ in result if client is ca)
-    b_count = sum(1 for client, _ in result if client is cb)
-    assert a_count == 4
-    assert b_count == 2
-
-
-def test_allocate_slots_exhausted_backlog_continues_other_clients() -> None:
-    """Test that when one client runs out of items, remaining slots go to others."""
-    ca = _make_client_with_weight('A', weight=1.0)
-    cb = _make_client_with_weight('B', weight=1.0)
-    result = _allocate_slots(5, {ca: ['a1'], cb: ['b1', 'b2', 'b3', 'b4']})
-    assert len(result) == 5
-    a_count = sum(1 for client, _ in result if client is ca)
-    b_count = sum(1 for client, _ in result if client is cb)
-    assert a_count == 1
-    assert b_count == 4
-
-
-def test_allocate_slots_stops_mid_turn_when_limit_hit() -> None:
-    """Test that _allocate_slots stops mid-turn when the limit is reached during a weighted client's turn."""
-    ca = _make_client_with_weight('A', weight=2.0)
-    result = _allocate_slots(1, {ca: ['a1', 'a2', 'a3']})
-    assert len(result) == 1
-    assert result[0][0] is ca
-    assert result[0][1] == 'a1'
-
-
 def test_run_removal_cycle_staggers_between_items(monkeypatch: Any) -> None:
     """Test that _run_removal_cycle sleeps stagger_interval_seconds between items."""
     sleep_calls: list[float] = []
     monkeypatch.setattr('killarr.main.time.sleep', sleep_calls.append)
-    items = [QueueItem(i, i, f'M{i}', 'remove', 'no_messages', []) for i in range(1, 3)]
+    items = [QueueItem(i, i, f'M{i}', True, False, False, 'no_messages', []) for i in range(1, 3)]
     client = _make_mock_client('R', stalled_items=items)
     _run_removal_cycle([client], {'stagger_interval_seconds': 5, 'batch_size': -1})
     assert sleep_calls == [5]  # one sleep between 2 items, none after last
@@ -990,7 +954,7 @@ def test_run_removal_cycle_no_sleep_after_last_item(monkeypatch: Any) -> None:
     """Test that _run_removal_cycle does not sleep after the final item."""
     sleep_calls: list[float] = []
     monkeypatch.setattr('killarr.main.time.sleep', sleep_calls.append)
-    item = QueueItem(1, 1, 'M1', 'remove', 'no_messages', [])
+    item = QueueItem(1, 1, 'M1', True, False, False, 'no_messages', [])
     client = _make_mock_client('R', stalled_items=[item])
     _run_removal_cycle([client], {'stagger_interval_seconds': 5, 'batch_size': -1})
     assert not sleep_calls  # only one item, no sleep

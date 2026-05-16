@@ -233,19 +233,35 @@ _parse_config_cases = {
     },
     'instance_killarr_override_promoted': {
         'config_data': make_config(
-            killarr_section={'batch_size': 10, 'blocklist': True},
+            killarr_section={'batch_size': 10, 'dry_run': True},
             instances={
                 'r': {
                     'type': 'radarr',
                     'host': 'http://r',
                     'api_key': 'k',
                     'enabled': True,
-                    'killarr': {'batch_size': 3, 'blocklist': False},
+                    'killarr': {'batch_size': 3, 'dry_run': False},
                 }
             },
         ),
         'expected_result': {
-            'instances': {'radarr': [{'batch_size': 3, 'blocklist': False}]},
+            'instances': {'radarr': [{'batch_size': 3, 'dry_run': False}]},
+        },
+    },
+    'instance_killarr_stall_category_override_promoted': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'stalled': {'remove': True, 'blocklist': False}},
+                }
+            },
+        ),
+        'expected_result': {
+            'instances': {'radarr': [{'stalled': {'remove': True, 'blocklist': False}}]},
         },
     },
 }
@@ -476,14 +492,14 @@ _load_config_from_env_cases = {
     'bool_parsing': {
         'env_vars': {
             'KILLARR_GLOBAL_DRY_RUN': 'true',
-            'KILLARR_GLOBAL_BLOCKLIST': 'false',
+            'KILLARR_GLOBAL_INTERLEAVE_INSTANCES': 'false',
             'KILLARR_INSTANCE_0_NAME': 'R',
             'KILLARR_INSTANCE_0_TYPE': 'radarr',
             'KILLARR_INSTANCE_0_URL': 'http://r',
             'KILLARR_INSTANCE_0_API_KEY': 'k',
         },
         'expected_result': {
-            'global_settings': {'dry_run': True, 'blocklist': False},
+            'global_settings': {'dry_run': True, 'interleave_instances': False},
         },
     },
     'duplicate_name_raises': {
@@ -522,6 +538,38 @@ _load_config_from_env_cases = {
         'expected_result': {
             'instances': {'radarr': [{'weight': 1.5}]},
         },
+    },
+    'stall_category_json_dict_parsed': {
+        'env_vars': {
+            'KILLARR_GLOBAL_STALLED': '{"remove": true, "blocklist": true, "search": false}',
+            'KILLARR_INSTANCE_0_NAME': 'R',
+            'KILLARR_INSTANCE_0_TYPE': 'radarr',
+            'KILLARR_INSTANCE_0_URL': 'http://r',
+            'KILLARR_INSTANCE_0_API_KEY': 'k',
+        },
+        'expected_result': {
+            'global_settings': {'stalled': {'remove': True, 'blocklist': True, 'search': False}},
+        },
+    },
+    'stall_category_invalid_json_raises': {
+        'env_vars': {
+            'KILLARR_GLOBAL_STALLED': '{remove: true}',
+            'KILLARR_INSTANCE_0_NAME': 'R',
+            'KILLARR_INSTANCE_0_TYPE': 'radarr',
+            'KILLARR_INSTANCE_0_URL': 'http://r',
+            'KILLARR_INSTANCE_0_API_KEY': 'k',
+        },
+        'expected_error': "Invalid JSON for env var value: '{remove: true}'",
+    },
+    'stall_category_plain_string_fails_validation': {
+        'env_vars': {
+            'KILLARR_GLOBAL_STALLED': 'blocklist',
+            'KILLARR_INSTANCE_0_NAME': 'R',
+            'KILLARR_INSTANCE_0_TYPE': 'radarr',
+            'KILLARR_INSTANCE_0_URL': 'http://r',
+            'KILLARR_INSTANCE_0_API_KEY': 'k',
+        },
+        'expected_error': "'killarr.stalled' must be a dict of action flags, got str.",
     },
 }
 
@@ -670,19 +718,23 @@ def test_parse_config_with_actions() -> None:
         'instances': {
             'instance_radarr': {'type': 'radarr', 'url': 'http://host', 'api_key': 'test_key', 'enabled': True}
         },
-        'killarr': {'no_upgrade': 'ignore', 'stalled': 'blocklist', 'dangerous_file': 'remove'},
+        'killarr': {
+            'no_upgrade': {},
+            'stalled': {'remove': True, 'blocklist': True},
+            'dangerous_file': {'remove': True},
+        },
     }
     result = parse_config(config)
-    assert result['global_settings']['no_upgrade'] == 'ignore'
-    assert result['global_settings']['stalled'] == 'blocklist'
-    assert result['global_settings']['dangerous_file'] == 'remove'
+    assert result['global_settings']['no_upgrade'] == {}
+    assert result['global_settings']['stalled'] == {'remove': True, 'blocklist': True}
+    assert result['global_settings']['dangerous_file'] == {'remove': True}
 
 
 def test_parse_config_invalid_action() -> None:
-    """Test parse_config raises ValueError when a stall category has an unrecognized action value."""
+    """Test parse_config raises ValueError when a stall category has an invalid action value."""
     config = {
         'instances': {'r': {'type': 'radarr', 'url': 'http://h', 'api_key': 'k', 'enabled': True}},
-        'killarr': {'stalled': 'invalid_action'},
+        'killarr': {'stalled': 'remove'},
     }
-    with pytest.raises(ValueError, match='must be one of'):
+    with pytest.raises(ValueError, match='must be a dict'):
         parse_config(config)
