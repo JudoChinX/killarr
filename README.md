@@ -100,7 +100,7 @@ The fastest way to get started is with Docker Compose.
 killarr:
   interval: 3600    # Run every hour
   dry_run: true     # Start in dry run mode — no removals until you're satisfied
-  generic:
+  default:
     remove: true
     blocklist: true
     search: true

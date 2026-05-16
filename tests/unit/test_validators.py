@@ -217,6 +217,30 @@ _validate_stall_action_settings_cases = {
         'settings': {'not_a_category': 'whatever'},
         'expect_error': False,
     },
+    'default_string_value_raises': {
+        'settings': {'default': 'remove'},
+        'expect_error': True,
+    },
+    'default_valid_dict_passes': {
+        'settings': {'default': {'remove': True, 'blocklist': True, 'search': True}},
+        'expect_error': False,
+    },
+    'default_empty_dict_passes': {
+        'settings': {'default': {}},
+        'expect_error': False,
+    },
+    'default_blocklist_without_remove_raises': {
+        'settings': {'default': {'blocklist': True}},
+        'expect_error': True,
+    },
+    'default_unknown_key_raises': {
+        'settings': {'default': {'remove': True, 'purge': True}},
+        'expect_error': True,
+    },
+    'default_search_without_remove_raises': {
+        'settings': {'default': {'search': True}},
+        'expect_error': True,
+    },
 }
 
 

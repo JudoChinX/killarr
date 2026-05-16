@@ -26,10 +26,10 @@ killarr:
   #   search:    Trigger a fresh search after removal (requires remove: true).
   #
   # Omit a category to ignore it — all flags default to false when not specified.
-  # The 'stalled' key is the fallback for any category not explicitly configured.
-  # Resolution order: instance override -> global -> stalled -> ignore
+  # The 'default' key is the fallback for any category not explicitly configured.
+  # Resolution order: instance override -> global -> default -> ignore
   #
-  # stalled:           # Generic stalls (0 peers, no seeds)
+  # default:           # Fallback for all unconfigured categories
   #   remove: true
   #   blocklist: true
   #   search: true

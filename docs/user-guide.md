@@ -283,14 +283,15 @@ All flags default to `false` when not specified.
 Killarr uses a hierarchical approach to resolve actions for each stall category:
 
 1. **Specific Category:** If a category (e.g., `manual_import`) is defined in your config, those actions are used.
-2. **Global Fallback:** If a category is **not defined**, it falls back to the actions configured under the `generic` category.
-3. **Ignore:** To explicitly disable a category so that it does **not** fall back to `generic`, set it to an empty dictionary: `manual_import: {}`.
+2. **Default Fallback:** If a category is **not defined**, it falls back to the actions configured under the `default` key.
+3. **Ignore:** To explicitly disable a category so that it does **not** fall back to `default`, set it to an empty dictionary: `manual_import: {}`.
 
 #### Stall Categories
 
 | Category | Description |
 |---|---|
-| `generic` | Generic fallback for reasons not matching other categories (e.g., 0 peers). |
+| `default` | Applied to all categories not explicitly configured. Not a classification category — items are never classified as `default`. |
+| `generic` | Transient stall patterns: locked by another process, qBittorrent downloading metadata, download stalled with no seeders. |
 | `no_upgrade` | "Not a Custom Format upgrade for existing [media]". |
 | `manual_import` | "Manual import required" or matched to media by ID. |
 | `no_files` | "No files found are eligible for import". |
@@ -304,21 +305,21 @@ Killarr uses a hierarchical approach to resolve actions for each stall category:
 
 ```yaml
 killarr:
-  generic:           # Blocklist and retry generic stalls
+  default:             # Applied to all categories not explicitly configured
     remove: true
     blocklist: true
     search: true
-  no_messages:       # Retry if no specific reason is given
+  no_messages:         # Override: retry without blocklisting
     remove: true
     search: true
-  # no_upgrade, manual_import, etc. — omitted, so they default to no action
+  # generic, no_upgrade, manual_import, etc. — fall back to default
 ```
 
 Both block and inline YAML syntax are accepted — they parse identically:
 
 ```yaml
 # Block (recommended)          # Inline (also valid)
-generic:                        generic: {remove: true, blocklist: true, search: true}
+default:                        default: {remove: true, blocklist: true, search: true}
   remove: true
   blocklist: true
   search: true
@@ -385,7 +386,7 @@ Any global `killarr:` setting (including actions) can be overridden for a specif
 ```yaml
 killarr:
   batch_size: 10
-  generic:
+  default:
     remove: true
     blocklist: true
     search: true
@@ -396,7 +397,7 @@ instances:
     host: "http://radarr:7878"
     api_key: "key1"
     enabled: true
-    # Uses global defaults: batch_size=10, generic={remove: true, blocklist: true, search: true}
+    # Uses global defaults: batch_size=10, default={remove: true, blocklist: true, search: true}
 
   Radarr-4K:
     type: radarr
@@ -429,6 +430,7 @@ Prefix global settings with `KILLARR_GLOBAL_`.
 | `KILLARR_GLOBAL_RETRY_INTERVAL_MINUTES` | `0` | Per-media cooldown in minutes. `0` disables. |
 | `KILLARR_GLOBAL_INCLUDE_TAGS` | `(none)` | Comma-separated tag names. |
 | `KILLARR_GLOBAL_EXCLUDE_TAGS` | `(none)` | Comma-separated tag names. |
+| `KILLARR_GLOBAL_DEFAULT` | `(none)` | Fallback flags for all unconfigured categories as JSON (e.g. `{"remove":true,"blocklist":true,"search":true}`). |
 | `KILLARR_GLOBAL_GENERIC` | `(none)` | Flags for `generic` category as JSON (e.g. `{"remove":true,"blocklist":true,"search":true}`). |
 | `KILLARR_GLOBAL_NO_UPGRADE` | `(none)` | Flags for `no_upgrade` category. |
 | `KILLARR_GLOBAL_MANUAL_IMPORT` | `(none)` | Flags for `manual_import` category. |

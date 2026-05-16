@@ -9,6 +9,7 @@ from killarr.classifier import StallCategory
 VALID_ACTIONS = ('remove', 'blocklist', 'search')
 VALID_ARR_TYPES = ('radarr', 'sonarr', 'lidarr')
 STALL_CATEGORIES = tuple(category.value for category in StallCategory)
+STALL_ACTION_CONFIG_KEYS = STALL_CATEGORIES + ('default',)
 
 
 def _validate_active_hours(value: str) -> None:
@@ -166,7 +167,7 @@ def validate_stall_action_settings(settings: dict) -> None:
     Raises:
         ValueError: If an action value is invalid.
     """
-    for category in STALL_CATEGORIES:
+    for category in STALL_ACTION_CONFIG_KEYS:
         if category not in settings:
             continue
         value = settings[category]
