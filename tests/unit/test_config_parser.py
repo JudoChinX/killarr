@@ -142,11 +142,11 @@ _parse_config_cases = {
         'config_data': make_config(instances={'r': {'host': 'http://x', 'api_key': 'k', 'enabled': True}}),
         'expected_error': "Missing 'type' field for instance 'r'. Must be one of: radarr, sonarr, lidarr.",
     },
-    'invalid_type_raises': {
+    'unsupported_type_only_raises_no_instances': {
         'config_data': make_config(
             instances={'r': {'type': 'plex', 'host': 'http://x', 'api_key': 'k', 'enabled': True}}
         ),
-        'expected_error': "Invalid type 'plex' for instance 'r'. Must be one of: radarr, sonarr, lidarr.",
+        'expected_error': "No instances defined under 'instances'. Add at least one Radarr, Sonarr, or Lidarr instance.",
     },
     'retry_interval_minutes_defaults_to_zero': {
         'config_data': make_config(),
@@ -282,6 +282,21 @@ def test_parse_config(config_data: Any, expected_error: Any, expected_result: An
             parse_config(config_data)
     else:
         assert_config_result(parse_config(config_data), expected_result)
+
+
+def test_parse_config_unsupported_type_logs_error_and_skips(caplog: Any) -> None:
+    """Test that an unsupported instance type logs an error and skips the instance."""
+    config = make_config(
+        instances={
+            'whisparr1': {'type': 'whisparr', 'host': 'http://w', 'api_key': 'k', 'enabled': True},
+            'r1': {'type': 'radarr', 'host': 'http://r', 'api_key': 'k', 'enabled': True},
+        }
+    )
+    with caplog.at_level(logging.ERROR):
+        result = parse_config(config)
+    assert len(result['instances']['radarr']) == 1
+    assert result['instances']['radarr'][0]['name'] == 'r1'
+    assert "Unsupported instance type 'whisparr' for instance 'whisparr1'" in caplog.text
 
 
 def test_parse_config_host_not_in_result() -> None:
