@@ -58,7 +58,33 @@ jobs:
         run: pip-audit -r requirements.txt
 
       - name: pytest
-        run: pytest tests/ -v
+        run: pytest tests/ -v --ignore=tests/system/test_docker.py
+
+  docker_system_testing:
+    needs: tests_and_quality
+    runs-on: self-hosted
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Docker system tests
+        run: pytest tests/system/test_docker.py -v --override-ini="addopts="
+
+      - name: Tear down test containers
+        if: always()
+        run: docker compose -f tests/system/compose.yaml down --volumes || true
 
   release:
     needs: tests_and_quality

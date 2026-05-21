@@ -1,0 +1,70 @@
+services:
+  radarr:
+    image: linuxserver/radarr:latest
+    container_name: killarr-test-radarr
+    hostname: radarr
+    environment:
+      TZ: UTC
+      PUID: "1000"
+      PGID: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7878/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 120s
+    ports:
+      - "7878"
+    restart: "no"
+  sonarr:
+    image: linuxserver/sonarr:latest
+    container_name: killarr-test-sonarr
+    hostname: sonarr
+    environment:
+      TZ: UTC
+      PUID: "1000"
+      PGID: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8989/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 120s
+    ports:
+      - "8989"
+    restart: "no"
+  lidarr:
+    image: linuxserver/lidarr:latest
+    container_name: killarr-test-lidarr
+    hostname: lidarr
+    environment:
+      TZ: UTC
+      PUID: "1000"
+      PGID: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8686/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 120s
+    ports:
+      - "8686"
+    restart: "no"
+  fakesab:
+    build:
+      context: .
+      dockerfile: Dockerfile.fakesab
+    container_name: killarr-test-fakesab
+    hostname: fakesab
+    ports:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/api?mode=version&apikey=killarr-test&output=json', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: "no"
+
+networks:
+  default:
+    name: killarr-test-net
