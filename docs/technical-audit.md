@@ -251,7 +251,7 @@ Killarr operates entirely within your local network:
 
 ### 4. Test Coverage as Documentation
 
-**Decision:** 321 tests covering all code paths including error conditions.
+**Decision:** 322 tests covering all code paths including error conditions.
 
 **Why:** Tests serve three purposes:
 1. Prevent regressions.
@@ -308,7 +308,7 @@ Every line of AI-generated code was reviewed, tested, and validated against requ
 
 ## Testing Strategy
 
-**Test Coverage:** 321 tests, 99.43% coverage.
+**Test Coverage:** 322 tests, 99.43% coverage.
 
 - `tests/unit/test_config_parser.py`: Configuration validation, schema defaults, shared config, env var mode — no network calls.
 - `tests/unit/test_validators.py`: Schema validation and setting constraints — no network calls.
@@ -346,7 +346,7 @@ Development (see `requirements-dev.txt`):
 
 - `killarr/main.py`: 376 lines
 - `killarr/classifier.py`: 87 lines
-- `killarr/config_parser.py`: 254 lines
+- `killarr/config_parser.py`: 256 lines
 - `killarr/validators.py`: 185 lines
 - `killarr/clients/arr.py`: 421 lines
 - `killarr/__init__.py`: 1 line (package marker)
