@@ -19,6 +19,8 @@ killarr:
   # batch_size: -1            # Remove all stalled items each cycle (unlimited)
   # batch_size: 0             # Disable removal entirely
 
+  # interleave_instances: false # false = contiguous per instance, true = alternate across instances
+
   # --- Stall actions ---
   # Each stall category maps to a dict of granular flags:
   #   remove:    Delete from queue + download client.
@@ -59,6 +61,7 @@ instances:
     host: "http://radarr:7878"       # Use container hostname for Docker
     api_key: "YOUR_RADARR_API_KEY"
     enabled: true
+    # weight: 1.0                    # Optional: Priority weight for slot allocation
     # killarr:                       # Per-instance Killarr overrides (optional)
     #   batch_size: 5
     #   no_upgrade:                  # Override for this instance
@@ -69,9 +72,11 @@ instances:
     host: "http://sonarr:8989"
     api_key: "YOUR_SONARR_API_KEY"
     enabled: false                   # Set to true to activate
+    # weight: 1.0
 
   lidarr:
     type: lidarr
     host: "http://lidarr:8686"
     api_key: "YOUR_LIDARR_API_KEY"
     enabled: false
+    # weight: 1.0
