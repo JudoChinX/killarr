@@ -237,7 +237,14 @@ def parse_config(config: Any) -> dict:
     if not isinstance(raw_instances, dict):
         raise ValueError("'instances' must be a YAML mapping.")
 
-    final_instances: dict[str, list] = {'radarr': [], 'sonarr': [], 'lidarr': []}
+    final_instances: dict[str, list] = {
+        'radarr': [],
+        'sonarr': [],
+        'lidarr': [],
+        'whisparr': [],
+        'whisparr_v2': [],
+        'whisparr_v3': [],
+    }
     all_empty = True
 
     for instance_name, instance_config in raw_instances.items():
@@ -250,7 +257,9 @@ def parse_config(config: Any) -> dict:
             final_instances[inst_type].append(inst)
 
     if all_empty:
-        raise ValueError("No instances defined under 'instances'. Add at least one Radarr, Sonarr, or Lidarr instance.")
+        raise ValueError(
+            "No instances defined under 'instances'. Add at least one Radarr, Sonarr, Lidarr, or Whisparr instance."
+        )
 
     config['instances'] = final_instances
     return config

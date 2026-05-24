@@ -7,7 +7,7 @@ from typing import Any
 from killarr.classifier import StallCategory
 
 VALID_ACTIONS = ('remove', 'blocklist', 'search')
-VALID_ARR_TYPES = ('radarr', 'sonarr', 'lidarr')
+VALID_ARR_TYPES = ('radarr', 'sonarr', 'lidarr', 'whisparr', 'whisparr_v2', 'whisparr_v3')
 STALL_CATEGORIES = tuple(category.value for category in StallCategory)
 STALL_ACTION_CONFIG_KEYS = STALL_CATEGORIES + ('default',)
 

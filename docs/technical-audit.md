@@ -136,6 +136,8 @@ Each cycle:
 - `RadarrClient`: Radarr-specific implementation (v3 endpoints, `movieId`, `MoviesSearch` command).
 - `SonarrClient`: Sonarr-specific implementation (v3 endpoints, `episodeId`, `EpisodeSearch` command).
 - `LidarrClient`: Lidarr-specific implementation (v1 endpoints, `albumId`, `AlbumSearch` command).
+- `WhisparrV2Client`: Whisparr v2 implementation, inherits `SonarrClient` (Sonarr-based API, `episodeId`, `EpisodeSearch`).
+- `WhisparrV3Client`: Whisparr v3 implementation, inherits `RadarrClient` (Radarr-based API, `movieId`, `MoviesSearch`).
 
 **Key Methods:**
 - `get_stalled_items()`: Fetches the full queue, filters for stalled items, classifies them via `classifier.py`, and applies tag filtering and batch limits. Returns a tuple of `(actionable_items, skip_stats)` where each `QueueItem` carries `queue_id`, `media_id`, `title`, `remove`, `blocklist`, `search`, `category`, `messages`, and `added` (ISO 8601 timestamp from the \*arr API).
@@ -153,14 +155,14 @@ Each cycle:
 
 | Endpoint | Method | Purpose | Frequency | Read/Write |
 |---|---|---|---|---|
-| `/api/v3/queue` (Radarr/Sonarr), `/api/v1/queue` (Lidarr) | GET | Fetch all queue records | Per cycle per instance | Read-only |
-| `/api/v3/queue/{id}` (Radarr/Sonarr), `/api/v1/queue/{id}` (Lidarr) | DELETE | Remove stalled queue item | Per stalled item | **Write** |
-| `/api/v3/command` (Radarr/Sonarr), `/api/v1/command` (Lidarr) | POST | Trigger fresh search | Per removal (if action is `retry` or `blocklist`) | **Write** |
-| `/api/v3/tag` (Radarr/Sonarr), `/api/v1/tag` (Lidarr) | GET | Resolve tag names to IDs | Startup only (if tags configured) | Read-only |
+| `/api/v3/queue` (Radarr/Sonarr/Whisparr), `/api/v1/queue` (Lidarr) | GET | Fetch all queue records | Per cycle per instance | Read-only |
+| `/api/v3/queue/{id}` (Radarr/Sonarr/Whisparr), `/api/v1/queue/{id}` (Lidarr) | DELETE | Remove stalled queue item | Per stalled item | **Write** |
+| `/api/v3/command` (Radarr/Sonarr/Whisparr), `/api/v1/command` (Lidarr) | POST | Trigger fresh search | Per removal (if action is `retry` or `blocklist`) | **Write** |
+| `/api/v3/tag` (Radarr/Sonarr/Whisparr), `/api/v1/tag` (Lidarr) | GET | Resolve tag names to IDs | Startup only (if tags configured) | Read-only |
 
 **Search Commands Sent:**
-- Radarr: `{"name": "MoviesSearch", "movieIds": [<id>]}`
-- Sonarr: `{"name": "EpisodeSearch", "episodeIds": [<id>]}`
+- Radarr / Whisparr v3: `{"name": "MoviesSearch", "movieIds": [<id>]}`
+- Sonarr / Whisparr v2: `{"name": "EpisodeSearch", "episodeIds": [<id>]}`
 - Lidarr: `{"name": "AlbumSearch", "albumIds": [<id>]}`
 
 **Data Accessed:**
@@ -251,7 +253,7 @@ Killarr operates entirely within your local network:
 
 ### 4. Test Coverage as Documentation
 
-**Decision:** 331 tests covering all code paths including error conditions.
+**Decision:** 347 tests covering all code paths including error conditions.
 
 **Why:** Tests serve three purposes:
 1. Prevent regressions.
@@ -308,13 +310,15 @@ Every line of AI-generated code was reviewed, tested, and validated against requ
 
 ## Testing Strategy
 
-**Test Coverage:** 331 tests, 99.44% coverage.
+**Test Coverage:** 347 tests, 99.45% coverage.
 
 - `tests/unit/test_config_parser.py`: Configuration validation, schema defaults, shared config, env var mode — no network calls.
 - `tests/unit/test_validators.py`: Schema validation and setting constraints — no network calls.
 - `tests/unit/test_classifier.py`: Stall reason classification tests — no network calls.
 - `tests/integration/test_arr_client.py`: Queue fetch, stall filtering, removal, search-again, tag resolution, dry run, stagger — all with mocked HTTP responses.
 - `tests/system/test_main.py`: Run loop, cycle orchestration, client building, config loading — mocked clients and config paths.
+- `tests/system/test_slot_allocation.py`: Weighted slot allocation across instances — mocked clients.
+- `tests/system/test_docker.py`: E2E system tests using real Docker instances of Radarr, Sonarr, Lidarr, and Whisparr. Run separately in CI via the `docker_system_testing` job; excluded from the standard `pytest` run.
 - `tests/builders.py`: Builder pattern for constructing queue record fixtures and client instances in tests.
 - `tests/helpers.py`: Mock HTTP response factories for queue and tag endpoints.
 
@@ -344,14 +348,14 @@ Development (see `requirements-dev.txt`):
 
 ## File Sizes
 
-- `killarr/main.py`: 376 lines
+- `killarr/main.py`: 381 lines
 - `killarr/classifier.py`: 87 lines
-- `killarr/config_parser.py`: 256 lines
+- `killarr/config_parser.py`: 265 lines
 - `killarr/validators.py`: 185 lines
-- `killarr/clients/arr.py`: 427 lines
+- `killarr/clients/arr.py`: 447 lines
 - `killarr/__init__.py`: 1 line (package marker)
 - `killarr/clients/__init__.py`: 1 line (package marker)
-- **Total:** ~1,333 lines of Python
+- **Total:** ~1,367 lines of Python
 
 The small codebase size makes comprehensive security auditing feasible.
 
@@ -362,7 +366,7 @@ The small codebase size makes comprehensive security auditing feasible.
 Don't trust documentation — verify the claims:
 
 1. **Run the tests:** `pytest` — see that security-relevant code is tested.
-2. **Read the code:** Start with `killarr/main.py` — 376 lines.
+2. **Read the code:** Start with `killarr/main.py` — 381 lines.
 3. **Check the API calls:** Enable `LOG_LEVEL=DEBUG` — every HTTP request and detailed skip reasons are logged.
 4. **Observe the cycle:** Look for cycle summaries in the logs (`Found X items to remove (Evaluated: Y, Skipped: Z)`) to confirm operation.
 5. **Review dependencies:** `cat requirements.txt` — two libraries, both standard.

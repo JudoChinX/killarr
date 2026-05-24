@@ -1,4 +1,4 @@
-"""E2E system tests using real Docker instances of Radarr, Sonarr, and Lidarr."""
+"""E2E system tests using real Docker instances of Radarr, Sonarr, Lidarr, and Whisparr."""
 
 # pylint: disable=protected-access,redefined-outer-name
 import logging
@@ -26,18 +26,24 @@ _API_VERSIONS: dict[str, str] = {
     'lidarr': 'v1',
     'radarr': 'v3',
     'sonarr': 'v3',
+    'whisparr_v2': 'v3',
+    'whisparr_v3': 'v3',
 }
 
 _CONTAINER_NAMES: dict[str, str] = {
     'lidarr': 'killarr-test-lidarr',
     'radarr': 'killarr-test-radarr',
     'sonarr': 'killarr-test-sonarr',
+    'whisparr_v2': 'killarr-test-whisparr-v2',
+    'whisparr_v3': 'killarr-test-whisparr-v3',
 }
 
 _DB_PATHS: dict[str, str] = {
     'lidarr': '/config/lidarr.db',
     'radarr': '/config/radarr.db',
     'sonarr': '/config/sonarr.db',
+    'whisparr_v2': '/config/whisparr2.db',
+    'whisparr_v3': '/config/whisparr3.db',
 }
 
 _HTTP_TIMEOUT: int = 10
@@ -46,6 +52,8 @@ _SERVICES: dict[str, int] = {
     'lidarr': 8686,
     'radarr': 7878,
     'sonarr': 8989,
+    'whisparr_v2': 6969,
+    'whisparr_v3': 6969,
 }
 
 

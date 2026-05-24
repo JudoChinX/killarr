@@ -64,6 +64,40 @@ services:
       timeout: 5s
       retries: 10
     restart: "no"
+  whisparr_v2:
+    image: ghcr.io/hotio/whisparr:latest
+    container_name: killarr-test-whisparr-v2
+    hostname: whisparr_v2
+    environment:
+      TZ: UTC
+      PUID: "1000"
+      PGID: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6969/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 120s
+    ports:
+      - "6969"
+    restart: "no"
+  whisparr_v3:
+    image: ghcr.io/thespad/whisparr:latest
+    container_name: killarr-test-whisparr-v3
+    hostname: whisparr_v3
+    environment:
+      TZ: UTC
+      PUID: "1000"
+      PGID: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6969/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 120s
+    ports:
+      - "6969"
+    restart: "no"
 
 networks:
   default:

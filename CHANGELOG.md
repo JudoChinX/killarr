@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Whisparr v2 (`whisparr_v2`) and Whisparr v3 (`whisparr_v3`) as supported instance types. Whisparr v2 is Sonarr-based; Whisparr v3 is Radarr-based. The bare `whisparr` type is accepted as an alias for `whisparr_v3`.
+
 ### Fixed
 
 - Queue fetches now include unknown items (downloads not linked to a media entry) by passing `includeUnknownMovieItems`, `includeUnknownSeriesItems`, and `includeUnknownAlbumItems` to the respective arr APIs. Stalled unknown items were previously invisible to killarr and would never be removed.

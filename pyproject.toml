@@ -31,6 +31,7 @@ jobs = 0
 [tool.pylint.messages_control]
 disable = [
     "line-too-long",
+    "too-many-lines",
     "duplicate-code",
     "arguments-differ",
     "import-outside-toplevel",

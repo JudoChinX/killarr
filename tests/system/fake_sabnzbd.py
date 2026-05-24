@@ -8,9 +8,11 @@ from urllib.parse import parse_qs
 from urllib.parse import urlparse
 
 _DOWNLOAD_IDS: dict[str, str] = {
+    'lidarr': 'killarr-test-lidarr-001',
     'radarr': 'killarr-test-radarr-001',
     'sonarr': 'killarr-test-sonarr-001',
-    'lidarr': 'killarr-test-lidarr-001',
+    'whisparr_v2': 'killarr-test-whisparr-v2-001',
+    'whisparr_v3': 'killarr-test-whisparr-v3-001',
 }
 
 # Items live in history as Completed. The arr instance tries to import from the
@@ -119,6 +121,24 @@ class _Handler(BaseHTTPRequestHandler):
                             'name': 'lidarr',
                             'order': 3,
                             'dir': 'lidarr',
+                            'newzbin': '',
+                            'pp': '',
+                            'script': 'None',
+                            'priority': 0,
+                        },
+                        {
+                            'name': 'whisparr_v2',
+                            'order': 4,
+                            'dir': 'whisparr_v2',
+                            'newzbin': '',
+                            'pp': '',
+                            'script': 'None',
+                            'priority': 0,
+                        },
+                        {
+                            'name': 'whisparr_v3',
+                            'order': 5,
+                            'dir': 'whisparr_v3',
                             'newzbin': '',
                             'pp': '',
                             'script': 'None',
