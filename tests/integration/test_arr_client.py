@@ -17,6 +17,8 @@ from tests.builders import ClientBuilder
 from tests.builders import LidarrQueueBuilder
 from tests.builders import RadarrQueueBuilder
 from tests.builders import SonarrQueueBuilder
+from tests.builders import WhisparrV2QueueBuilder
+from tests.builders import WhisparrV3QueueBuilder
 from tests.conftest import FIXED_NOW
 from tests.helpers import mock_http_response
 from tests.helpers import mock_queue_response
@@ -907,6 +909,14 @@ _queue_extra_params_cases = {
         'arr_type': 'lidarr',
         'expected_key': 'includeUnknownAlbumItems',
     },
+    'whisparr_v2_sends_include_unknown_series': {
+        'arr_type': 'whisparr_v2',
+        'expected_key': 'includeUnknownSeriesItems',
+    },
+    'whisparr_v3_sends_include_unknown_movies': {
+        'arr_type': 'whisparr_v3',
+        'expected_key': 'includeUnknownMovieItems',
+    },
 }
 
 
@@ -934,6 +944,8 @@ _get_media_id_missing_cases = {
     'radarr_returns_zero_when_movie_id_absent': {'arr_type': 'radarr', 'record': {}},
     'sonarr_returns_zero_when_episode_id_absent': {'arr_type': 'sonarr', 'record': {}},
     'lidarr_returns_zero_when_album_id_absent': {'arr_type': 'lidarr', 'record': {}},
+    'whisparr_v2_returns_zero_when_episode_id_absent': {'arr_type': 'whisparr_v2', 'record': {}},
+    'whisparr_v3_returns_zero_when_movie_id_absent': {'arr_type': 'whisparr_v3', 'record': {}},
 }
 
 
@@ -946,3 +958,75 @@ def test_get_media_id_returns_zero_when_key_absent(arr_type: Any, record: Any) -
     """Test that _get_media_id returns 0 for unknown items missing their media ID key."""
     client = getattr(ClientBuilder(), arr_type)().build()
     assert client._get_media_id(record) == 0
+
+
+def test_whisparr_v2_get_record_title_formats_as_performer_scene() -> None:
+    """Test that WhisparrV2Client formats titles as 'Performer - Scene Title'."""
+    client = ClientBuilder().whisparr_v2().build()
+    record = {'title': 'A Great Scene', 'series': {'title': 'Jane Doe', 'tags': []}}
+    assert client._get_record_title(record) == 'Jane Doe - A Great Scene'
+
+
+def test_whisparr_v2_get_record_title_missing_series_uses_fallback() -> None:
+    """Test that WhisparrV2Client falls back to 'Unknown Performer' when series is absent."""
+    client = ClientBuilder().whisparr_v2().build()
+    record = {'id': 99, 'title': 'A Great Scene'}
+    assert client._get_record_title(record) == 'Unknown Performer - A Great Scene'
+
+
+def test_whisparr_v2_get_record_title_missing_title_uses_fallback() -> None:
+    """Test that WhisparrV2Client falls back to 'Queue item {id}' when title is absent."""
+    client = ClientBuilder().whisparr_v2().build()
+    record = {'id': 99, 'series': {'title': 'Jane Doe', 'tags': []}}
+    assert client._get_record_title(record) == 'Jane Doe - Queue item 99'
+
+
+def test_whisparr_v3_get_record_title_formats_as_studio_scene() -> None:
+    """Test that WhisparrV3Client formats titles as 'Studio - Scene Title'."""
+    client = ClientBuilder().whisparr_v3().build()
+    record = {'title': 'A Great Scene', 'studioTitle': 'Acme Studio', 'tags': []}
+    assert client._get_record_title(record) == 'Acme Studio - A Great Scene'
+
+
+def test_whisparr_v3_get_record_title_missing_studio_uses_fallback() -> None:
+    """Test that WhisparrV3Client falls back to 'Unknown Studio' when studioTitle is absent."""
+    client = ClientBuilder().whisparr_v3().build()
+    record = {'id': 99, 'title': 'A Great Scene', 'tags': []}
+    assert client._get_record_title(record) == 'Unknown Studio - A Great Scene'
+
+
+def test_whisparr_v3_get_record_title_missing_title_uses_fallback() -> None:
+    """Test that WhisparrV3Client falls back to 'Queue item {id}' when title is absent."""
+    client = ClientBuilder().whisparr_v3().build()
+    record = {'id': 99, 'studioTitle': 'Acme Studio', 'tags': []}
+    assert client._get_record_title(record) == 'Acme Studio - Queue item 99'
+
+
+def test_whisparr_v2_get_stalled_items_uses_episode_id() -> None:
+    """Test that WhisparrV2Client extracts episodeId as media_id (inherited from SonarrClient)."""
+    client = ClientBuilder().whisparr_v2().with_settings(no_files={'remove': True}).build()
+    record = (
+        WhisparrV2QueueBuilder()
+        .with_episode_id(42)
+        .with_status_messages(['No files found are eligible for import'])
+        .build()
+    )
+    client.session.get = MagicMock(return_value=mock_queue_response([record]))
+    items, _ = client.get_stalled_items()
+    assert len(items) == 1
+    assert items[0].media_id == 42
+
+
+def test_whisparr_v3_get_stalled_items_uses_movie_id() -> None:
+    """Test that WhisparrV3Client extracts movieId as media_id (inherited from RadarrClient)."""
+    client = ClientBuilder().whisparr_v3().with_settings(no_files={'remove': True}).build()
+    record = (
+        WhisparrV3QueueBuilder()
+        .with_movie_id(99)
+        .with_status_messages(['No files found are eligible for import'])
+        .build()
+    )
+    client.session.get = MagicMock(return_value=mock_queue_response([record]))
+    items, _ = client.get_stalled_items()
+    assert len(items) == 1
+    assert items[0].media_id == 99

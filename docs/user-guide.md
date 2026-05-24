@@ -344,7 +344,9 @@ Settings for individual \*arr instances under the `instances:` key.
 
 #### `type` (required)
 
-**Options:** `radarr`, `sonarr`, `lidarr`
+**Options:** `radarr`, `sonarr`, `lidarr`, `whisparr` (v3), `whisparr_v2`, `whisparr_v3`
+
+The bare `whisparr` type is an alias for `whisparr_v3`.
 
 ```yaml
 instances:
@@ -465,7 +467,7 @@ Each instance is identified by a numeric index. Prefix instance fields with `KIL
 | Variable | Required | Description |
 |---|---|---|
 | `KILLARR_INSTANCE_<n>_NAME` | Yes | Unique name for this instance. |
-| `KILLARR_INSTANCE_<n>_TYPE` | Yes | `radarr`, `sonarr`, or `lidarr` (case-insensitive). |
+| `KILLARR_INSTANCE_<n>_TYPE` | Yes | `radarr`, `sonarr`, `lidarr`, `whisparr`, `whisparr_v2`, or `whisparr_v3` (case-insensitive). |
 | `KILLARR_INSTANCE_<n>_URL` | Yes | Base URL of the instance (e.g. `http://radarr:7878`). |
 | `KILLARR_INSTANCE_<n>_API_KEY` | Yes | API key from the instance's settings page. |
 | `KILLARR_INSTANCE_<n>_ENABLED` | No | Defaults to `true`. |

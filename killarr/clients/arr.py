@@ -425,3 +425,23 @@ class SonarrClient(ArrClient):
     @override
     def _id_field(self) -> str:
         return 'episodeIds'
+
+
+class WhisparrV2Client(SonarrClient):
+    """Whisparr v2 queue management client (Sonarr-based API)."""
+
+    @override
+    def _get_record_title(self, record: dict) -> str:
+        performer = record.get('series', {}).get('title', 'Unknown Performer')
+        scene_title = record.get('title', f'Queue item {record.get("id", "Unknown")}')
+        return f'{performer} - {scene_title}'
+
+
+class WhisparrV3Client(RadarrClient):
+    """Whisparr v3 queue management client (Radarr-based API)."""
+
+    @override
+    def _get_record_title(self, record: dict) -> str:
+        studio = record.get('studioTitle', 'Unknown Studio')
+        scene_title = record.get('title', f'Queue item {record.get("id", "Unknown")}')
+        return f'{studio} - {scene_title}'

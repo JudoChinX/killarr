@@ -17,6 +17,8 @@ from killarr.clients.arr import ArrClient
 from killarr.clients.arr import LidarrClient
 from killarr.clients.arr import RadarrClient
 from killarr.clients.arr import SonarrClient
+from killarr.clients.arr import WhisparrV2Client
+from killarr.clients.arr import WhisparrV3Client
 from killarr.config_parser import get_setting_default
 from killarr.config_parser import load_config
 from killarr.config_parser import load_config_from_env
@@ -45,6 +47,9 @@ _CLIENT_MAP: dict[str, type[ArrClient]] = {
     'lidarr': LidarrClient,
     'radarr': RadarrClient,
     'sonarr': SonarrClient,
+    'whisparr': WhisparrV3Client,
+    'whisparr_v2': WhisparrV2Client,
+    'whisparr_v3': WhisparrV3Client,
 }
 _MAX_CONNECTION_ATTEMPTS: int = 3
 _RETRY_DELAY_SECONDS: int = 10

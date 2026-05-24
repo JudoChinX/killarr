@@ -1,0 +1,23 @@
+{
+  "records": [
+    {
+      "id": 1,
+      "movieId": 10,
+      "title": "Test.Scene.WEB-DL.mkv",
+      "studioTitle": "Test Studio",
+      "trackedDownloadStatus": "warning",
+      "tags": [],
+      "statusMessages": [
+        {
+          "messages": [
+            "No files found are eligible for import in /downloads/test"
+          ]
+        }
+      ],
+      "added": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "totalRecords": 1,
+  "page": 1,
+  "pageSize": 100
+}

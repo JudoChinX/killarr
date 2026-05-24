@@ -1,0 +1,26 @@
+{
+  "records": [
+    {
+      "id": 1,
+      "episodeId": 20,
+      "title": "Test.Performer.Scene.WEB-DL.mkv",
+      "trackedDownloadStatus": "warning",
+      "series": {
+        "id": 10,
+        "title": "Test Performer",
+        "tags": []
+      },
+      "statusMessages": [
+        {
+          "messages": [
+            "No files found are eligible for import in /downloads/test"
+          ]
+        }
+      ],
+      "added": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "totalRecords": 1,
+  "page": 1,
+  "pageSize": 100
+}

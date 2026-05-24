@@ -7,6 +7,8 @@ from killarr.clients.arr import ArrClient
 from killarr.clients.arr import LidarrClient
 from killarr.clients.arr import RadarrClient
 from killarr.clients.arr import SonarrClient
+from killarr.clients.arr import WhisparrV2Client
+from killarr.clients.arr import WhisparrV3Client
 
 DEFAULT_SETTINGS = {
     'batch_size': 10,
@@ -174,6 +176,85 @@ class LidarrQueueBuilder(_QueueRecordBuilder):
         return self
 
 
+class WhisparrV2QueueBuilder(_QueueRecordBuilder):
+    """Builder for Whisparr v2 queue record dicts (Sonarr-shaped)."""
+
+    def __init__(self) -> None:
+        """Initialize with default stalled Whisparr v2 queue record."""
+        self._data: dict[str, Any] = {
+            'id': 1,
+            'episodeId': 20,
+            'title': 'Test.Scene.WEB-DL.mkv',
+            'trackedDownloadStatus': 'warning',
+            'series': {'id': 10, 'title': 'Test Performer', 'tags': []},
+            'added': '2024-01-01T00:00:00Z',
+        }
+
+    def with_episode_id(self, episode_id: int) -> Self:
+        """Set the episodeId field.
+
+        Args:
+            episode_id: The ID of the episode.
+
+        Returns:
+            The builder instance.
+        """
+        self._data['episodeId'] = episode_id
+        return self
+
+    def with_tags(self, tag_ids: list[int]) -> Self:
+        """Set tags on the nested series dict.
+
+        Args:
+            tag_ids: List of integer tag IDs.
+
+        Returns:
+            The builder instance.
+        """
+        self._data['series']['tags'] = tag_ids
+        return self
+
+
+class WhisparrV3QueueBuilder(_QueueRecordBuilder):
+    """Builder for Whisparr v3 queue record dicts (Radarr-shaped)."""
+
+    def __init__(self) -> None:
+        """Initialize with default stalled Whisparr v3 queue record."""
+        self._data: dict[str, Any] = {
+            'id': 1,
+            'movieId': 10,
+            'title': 'Test.Scene.WEB-DL.mkv',
+            'studioTitle': 'Test Studio',
+            'trackedDownloadStatus': 'warning',
+            'tags': [],
+            'added': '2024-01-01T00:00:00Z',
+        }
+
+    def with_movie_id(self, movie_id: int) -> Self:
+        """Set the movieId field.
+
+        Args:
+            movie_id: The ID of the movie.
+
+        Returns:
+            The builder instance.
+        """
+        self._data['movieId'] = movie_id
+        return self
+
+    def with_tags(self, tag_ids: list[int]) -> Self:
+        """Set root-level tags.
+
+        Args:
+            tag_ids: List of integer tag IDs.
+
+        Returns:
+            The builder instance.
+        """
+        self._data['tags'] = tag_ids
+        return self
+
+
 class ClientBuilder:
     """Builder for ArrClient test instances."""
 
@@ -223,6 +304,24 @@ class ClientBuilder:
             The builder instance.
         """
         self._class = SonarrClient
+        return self
+
+    def whisparr_v2(self) -> 'ClientBuilder':
+        """Use WhisparrV2Client.
+
+        Returns:
+            The builder instance.
+        """
+        self._class = WhisparrV2Client
+        return self
+
+    def whisparr_v3(self) -> 'ClientBuilder':
+        """Use WhisparrV3Client.
+
+        Returns:
+            The builder instance.
+        """
+        self._class = WhisparrV3Client
         return self
 
     def with_name(self, name: str) -> 'ClientBuilder':
