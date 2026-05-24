@@ -80,7 +80,13 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Docker system tests
-        run: pytest tests/system/test_docker.py -v --override-ini="addopts="
+        run: >-
+          pytest tests/system/test_docker.py
+          --override-ini="addopts="
+          --log-cli-level=INFO
+          --log-level=INFO
+          "--log-cli-format=%(asctime)s [%(levelname)s] %(message)s"
+          --log-date-format="%H:%M:%S"
 
       - name: Tear down test containers
         if: always()

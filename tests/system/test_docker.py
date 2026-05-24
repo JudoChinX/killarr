@@ -1,6 +1,7 @@
 """E2E system tests using real Docker instances of Radarr, Sonarr, and Lidarr."""
 
 # pylint: disable=protected-access,redefined-outer-name
+import logging
 import os
 import socket
 import sqlite3
@@ -15,6 +16,8 @@ import requests
 
 from killarr.main import _run_removal_cycle
 from killarr.main import build_arr_clients
+
+logger = logging.getLogger(__name__)
 
 _COMPOSE_NETWORK: str = 'killarr-test-net'
 _COMPOSE_PATH: str = os.path.join(os.path.dirname(__file__), 'compose.yaml')
@@ -73,6 +76,7 @@ def _extract_api_key(container_name: str) -> str:
 
 def _trigger_monitoring(url: str, api_key: str, api_version: str) -> None:
     """Best-effort: POST RefreshMonitoredDownloads so arr checks the download client immediately."""
+    logger.info('Triggering monitoring refresh for %s.', url)
     try:
         requests.post(
             f'{url}/api/{api_version}/command',
@@ -85,11 +89,13 @@ def _trigger_monitoring(url: str, api_key: str, api_version: str) -> None:
 
 
 def _wait_for_ping(url: str, timeout: int = 120) -> None:
-    """Poll /ping until the service responds or timeout is exceeded."""
+    """Poll /ping until the service responds, raising TimeoutError on failure."""
+    logger.info('Waiting for %s to become healthy...', url)
     for _ in range(timeout):
         try:
             resp = requests.get(f'{url}/ping', timeout=5)
             if resp.ok:
+                logger.info('%s is healthy.', url)
                 return
         except requests.RequestException:
             pass
@@ -98,15 +104,22 @@ def _wait_for_ping(url: str, timeout: int = 120) -> None:
 
 
 def _wait_for_stalled_item(url: str, api_key: str, api_version: str, timeout: int = 60) -> None:
-    """Poll the arr queue until a stalled item appears or timeout is exceeded."""
+    """Poll the arr queue until a stalled item appears, raising TimeoutError on failure."""
+    logger.info('Waiting for stalled item to appear in %s queue...', url)
     for _ in range(timeout):
         try:
             resp = requests.get(
                 f'{url}/api/{api_version}/queue',
                 headers={'X-Api-Key': api_key},
+                params={
+                    'includeUnknownSeriesItems': 'true',
+                    'includeUnknownMovieItems': 'true',
+                    'includeUnknownAlbumItems': 'true',
+                },
                 timeout=5,
             )
             if resp.ok and any(r.get('trackedDownloadStatus') == 'warning' for r in resp.json().get('records', [])):
+                logger.info('%s stalled item detected in queue.', url)
                 return
         except requests.RequestException:
             pass
@@ -135,14 +148,16 @@ def docker_env() -> Generator[dict[str, str], None, None]:
         capture_output=True,
         check=False,
     )
+    logger.info('Starting compose stack...')
     result = subprocess.run(
-        ['docker', 'compose', '-f', _COMPOSE_PATH, 'up', '-d', '--wait'],
+        ['docker', 'compose', '-f', _COMPOSE_PATH, 'up', '-d', '--wait', '--build'],
         capture_output=True,
         text=True,
         check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(f'docker compose up failed (exit {result.returncode}):\n{result.stdout}\n{result.stderr}')
+    logger.info('Compose stack up. Connecting runner to network %s...', _COMPOSE_NETWORK)
     subprocess.run(
         ['docker', 'network', 'connect', _COMPOSE_NETWORK, socket.gethostname()],
         capture_output=True,
@@ -155,6 +170,7 @@ def docker_env() -> Generator[dict[str, str], None, None]:
 
     yield urls
 
+    logger.info('Tearing down compose stack...')
     subprocess.run(
         ['docker', 'network', 'disconnect', _COMPOSE_NETWORK, socket.gethostname()],
         capture_output=True,
@@ -176,6 +192,7 @@ def seeded_env(docker_env: dict[str, str], api_keys: dict[str, str]) -> None:
     """Seed each arr's SQLite database and wait for stalled items to appear in the queue."""
     fixtures_dir = os.path.join(os.path.dirname(__file__), 'fixtures')
     for service in docker_env:
+        logger.info('Seeding %s database...', service)
         container = _CONTAINER_NAMES[service]
         db_path = _DB_PATHS[service]
         sql_path = os.path.join(fixtures_dir, service, 'seed.sql')
@@ -199,6 +216,7 @@ def seeded_env(docker_env: dict[str, str], api_keys: dict[str, str]) -> None:
                 conn.commit()
             finally:
                 conn.close()
+            os.chmod(host_db, 0o666)
             subprocess.run(['docker', 'cp', host_db, f'{container}:{db_path}'], check=True)
             for ext in ('-wal', '-shm'):
                 wal_path = f'{host_db}{ext}'
@@ -226,6 +244,7 @@ def seeded_env(docker_env: dict[str, str], api_keys: dict[str, str]) -> None:
         # with trackedDownloadStatus=warning for killarr to act on.
         _trigger_monitoring(new_url, api_keys[service], _API_VERSIONS[service])
         _wait_for_stalled_item(new_url, api_keys[service], _API_VERSIONS[service], timeout=120)
+    logger.info('All services seeded and restarted.')
 
 
 def test_api_connectivity(docker_env: dict[str, str], api_keys: dict[str, str]) -> None:
@@ -238,7 +257,9 @@ def test_api_connectivity(docker_env: dict[str, str], api_keys: dict[str, str]) 
             timeout=_HTTP_TIMEOUT,
         )
         resp.raise_for_status()
-        assert 'version' in resp.json()
+        data = resp.json()
+        assert 'version' in data
+        logger.info('%s API OK (version: %s).', service, data.get('version', 'unknown'))
 
 
 def test_containers_healthy(docker_env: dict[str, str]) -> None:
@@ -246,6 +267,7 @@ def test_containers_healthy(docker_env: dict[str, str]) -> None:
     for service, url in docker_env.items():
         resp = requests.get(f'{url}/ping', timeout=_HTTP_TIMEOUT)
         assert resp.ok, f'{service} ping failed'
+        logger.info('%s ping OK.', service)
 
 
 def test_removal_cycle_clears_stalled_items(
@@ -266,6 +288,7 @@ def test_removal_cycle_clears_stalled_items(
         'default': {'remove': True, 'blocklist': False, 'search': False},
     }
     clients = build_arr_clients(instances_config, global_settings)
+    logger.info('Running removal cycle against %d service(s).', len(docker_env))
     _run_removal_cycle(clients, global_settings)
 
     for service, url in docker_env.items():
@@ -278,3 +301,4 @@ def test_removal_cycle_clears_stalled_items(
         resp.raise_for_status()
         stalled = [r for r in resp.json().get('records', []) if r.get('trackedDownloadStatus') == 'warning']
         assert not stalled, f'{service} still has {len(stalled)} stalled item(s) after removal cycle'
+        logger.info('%s queue clear.', service)
