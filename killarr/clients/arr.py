@@ -35,6 +35,7 @@ class ArrClient(ABC):
     ENDPOINT_QUEUE = '/api/v3/queue'
     ENDPOINT_COMMAND = '/api/v3/command'
     ENDPOINT_TAG = '/api/v3/tag'
+    _QUEUE_EXTRA_PARAMS: dict[str, str] = {}
 
     def __init__(
         self,
@@ -85,7 +86,7 @@ class ArrClient(ABC):
 
         while True:
             url = f'{self.url}{self.ENDPOINT_QUEUE}'
-            params = {'page': current_page, 'pageSize': page_size}
+            params: dict[str, str | int] = {'page': current_page, 'pageSize': page_size, **self._QUEUE_EXTRA_PARAMS}
             try:
                 response = self.session.get(url, params=params, timeout=30)
                 response.raise_for_status()
@@ -345,6 +346,7 @@ class LidarrClient(ArrClient):
     ENDPOINT_QUEUE = '/api/v1/queue'
     ENDPOINT_COMMAND = '/api/v1/command'
     ENDPOINT_TAG = '/api/v1/tag'
+    _QUEUE_EXTRA_PARAMS = {'includeUnknownAlbumItems': 'true'}
 
     @property
     @override
@@ -353,7 +355,7 @@ class LidarrClient(ArrClient):
 
     @override
     def _get_media_id(self, record: dict) -> int:
-        return record['albumId']
+        return record.get('albumId', 0)
 
     @override
     def _get_record_tags(self, record: dict) -> list[int]:
@@ -372,6 +374,8 @@ class LidarrClient(ArrClient):
 class RadarrClient(ArrClient):
     """Radarr queue management client."""
 
+    _QUEUE_EXTRA_PARAMS = {'includeUnknownMovieItems': 'true'}
+
     @property
     @override
     def _command_name(self) -> str:
@@ -379,7 +383,7 @@ class RadarrClient(ArrClient):
 
     @override
     def _get_media_id(self, record: dict) -> int:
-        return record['movieId']
+        return record.get('movieId', 0)
 
     @override
     def _get_record_tags(self, record: dict) -> list[int]:
@@ -398,6 +402,8 @@ class RadarrClient(ArrClient):
 class SonarrClient(ArrClient):
     """Sonarr queue management client."""
 
+    _QUEUE_EXTRA_PARAMS = {'includeUnknownSeriesItems': 'true'}
+
     @property
     @override
     def _command_name(self) -> str:
@@ -405,7 +411,7 @@ class SonarrClient(ArrClient):
 
     @override
     def _get_media_id(self, record: dict) -> int:
-        return record['episodeId']
+        return record.get('episodeId', 0)
 
     @override
     def _get_record_tags(self, record: dict) -> list[int]:

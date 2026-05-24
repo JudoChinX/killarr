@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Queue fetches now include unknown items (downloads not linked to a media entry) by passing `includeUnknownMovieItems`, `includeUnknownSeriesItems`, and `includeUnknownAlbumItems` to the respective arr APIs. Stalled unknown items were previously invisible to killarr and would never be removed.
+- `_get_media_id` no longer raises `KeyError` when processing unknown queue items whose media ID field is absent. Such items receive a media ID of `0`.
+
 
 ## [0.0.7] - 2026-05-21
 
