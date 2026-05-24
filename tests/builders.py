@@ -6,6 +6,7 @@ from typing import Self
 from killarr.clients.arr import ArrClient
 from killarr.clients.arr import LidarrClient
 from killarr.clients.arr import RadarrClient
+from killarr.clients.arr import ReadarrClient
 from killarr.clients.arr import SonarrClient
 from killarr.clients.arr import WhisparrV2Client
 from killarr.clients.arr import WhisparrV3Client
@@ -83,6 +84,46 @@ class RadarrQueueBuilder(_QueueRecordBuilder):
             The builder instance.
         """
         self._data['movieId'] = movie_id
+        return self
+
+    def with_tags(self, tag_ids: list[int]) -> Self:
+        """Set root-level tags.
+
+        Args:
+            tag_ids: List of integer tag IDs.
+
+        Returns:
+            The builder instance.
+        """
+        self._data['tags'] = tag_ids
+        return self
+
+
+class ReadarrQueueBuilder(_QueueRecordBuilder):
+    """Builder for Readarr queue record dicts."""
+
+    def __init__(self) -> None:
+        """Initialize with default stalled Readarr queue record."""
+        self._data: dict[str, Any] = {
+            'id': 1,
+            'bookId': 10,
+            'title': 'Test Book Title',
+            'author': {'id': 5, 'authorName': 'Test Author', 'tags': []},
+            'trackedDownloadStatus': 'warning',
+            'tags': [],
+            'added': '2024-01-01T00:00:00Z',
+        }
+
+    def with_book_id(self, book_id: int) -> Self:
+        """Set the bookId field.
+
+        Args:
+            book_id: The ID of the book.
+
+        Returns:
+            The builder instance.
+        """
+        self._data['bookId'] = book_id
         return self
 
     def with_tags(self, tag_ids: list[int]) -> Self:
@@ -295,6 +336,15 @@ class ClientBuilder:
             The builder instance.
         """
         self._class = RadarrClient
+        return self
+
+    def readarr(self) -> 'ClientBuilder':
+        """Use ReadarrClient.
+
+        Returns:
+            The builder instance.
+        """
+        self._class = ReadarrClient
         return self
 
     def sonarr(self) -> 'ClientBuilder':

@@ -1,4 +1,4 @@
-"""E2E system tests using real Docker instances of Radarr, Sonarr, Lidarr, and Whisparr."""
+"""E2E system tests using real Docker instances of Radarr, Readarr, Sonarr, Lidarr, and Whisparr."""
 
 # pylint: disable=protected-access,redefined-outer-name
 import logging
@@ -25,6 +25,7 @@ _COMPOSE_PATH: str = os.path.join(os.path.dirname(__file__), 'compose.yaml')
 _API_VERSIONS: dict[str, str] = {
     'lidarr': 'v1',
     'radarr': 'v3',
+    'readarr': 'v1',
     'sonarr': 'v3',
     'whisparr_v2': 'v3',
     'whisparr_v3': 'v3',
@@ -33,6 +34,7 @@ _API_VERSIONS: dict[str, str] = {
 _CONTAINER_NAMES: dict[str, str] = {
     'lidarr': 'killarr-test-lidarr',
     'radarr': 'killarr-test-radarr',
+    'readarr': 'killarr-test-readarr',
     'sonarr': 'killarr-test-sonarr',
     'whisparr_v2': 'killarr-test-whisparr-v2',
     'whisparr_v3': 'killarr-test-whisparr-v3',
@@ -41,6 +43,7 @@ _CONTAINER_NAMES: dict[str, str] = {
 _DB_PATHS: dict[str, str] = {
     'lidarr': '/config/lidarr.db',
     'radarr': '/config/radarr.db',
+    'readarr': '/config/readarr.db',
     'sonarr': '/config/sonarr.db',
     'whisparr_v2': '/config/whisparr2.db',
     'whisparr_v3': '/config/whisparr3.db',
@@ -51,6 +54,7 @@ _HTTP_TIMEOUT: int = 10
 _SERVICES: dict[str, int] = {
     'lidarr': 8686,
     'radarr': 7878,
+    'readarr': 8787,
     'sonarr': 8989,
     'whisparr_v2': 6969,
     'whisparr_v3': 6969,
@@ -120,9 +124,10 @@ def _wait_for_stalled_item(url: str, api_key: str, api_version: str, timeout: in
                 f'{url}/api/{api_version}/queue',
                 headers={'X-Api-Key': api_key},
                 params={
-                    'includeUnknownSeriesItems': 'true',
-                    'includeUnknownMovieItems': 'true',
                     'includeUnknownAlbumItems': 'true',
+                    'includeUnknownBookItems': 'true',
+                    'includeUnknownMovieItems': 'true',
+                    'includeUnknownSeriesItems': 'true',
                 },
                 timeout=5,
             )

@@ -17,14 +17,6 @@ from killarr.config_parser import parse_config
 from killarr.validators import VALID_ARR_TYPES
 from tests.helpers import assert_config_result
 
-
-def test_valid_arr_types_includes_whisparr_types() -> None:
-    """Test that VALID_ARR_TYPES includes all three Whisparr type strings."""
-    assert 'whisparr' in VALID_ARR_TYPES
-    assert 'whisparr_v2' in VALID_ARR_TYPES
-    assert 'whisparr_v3' in VALID_ARR_TYPES
-
-
 # --- Helpers ---
 
 
@@ -149,13 +141,13 @@ _parse_config_cases = {
     },
     'instance_missing_type_raises': {
         'config_data': make_config(instances={'r': {'host': 'http://x', 'api_key': 'k', 'enabled': True}}),
-        'expected_error': "Missing 'type' field for instance 'r'. Must be one of: radarr, sonarr, lidarr, whisparr, whisparr_v2, whisparr_v3.",
+        'expected_error': "Missing 'type' field for instance 'r'. Must be one of: radarr, readarr, sonarr, lidarr, whisparr, whisparr_v2, whisparr_v3.",
     },
     'unsupported_type_only_raises_no_instances': {
         'config_data': make_config(
             instances={'r': {'type': 'plex', 'host': 'http://x', 'api_key': 'k', 'enabled': True}}
         ),
-        'expected_error': "No instances defined under 'instances'. Add at least one Radarr, Sonarr, Lidarr, or Whisparr instance.",
+        'expected_error': "No instances defined under 'instances'. Add at least one Radarr, Readarr, Sonarr, Lidarr, or Whisparr instance.",
     },
     'retry_interval_minutes_defaults_to_zero': {
         'config_data': make_config(),
@@ -185,7 +177,7 @@ _parse_config_cases = {
         'config_data': {
             'instances': {'radarr': {'type': 'radarr', 'host': 'http://x', 'api_key': 'k', 'enabled': False}}
         },
-        'expected_error': "No instances defined under 'instances'. Add at least one Radarr, Sonarr, Lidarr, or Whisparr instance.",
+        'expected_error': "No instances defined under 'instances'. Add at least one Radarr, Readarr, Sonarr, Lidarr, or Whisparr instance.",
     },
     'missing_api_key_raises': {
         'config_data': make_config(instances={'r': {'type': 'radarr', 'host': 'http://x', 'enabled': True}}),
@@ -308,6 +300,22 @@ def test_parse_config_unsupported_type_logs_error_and_skips(caplog: Any) -> None
     assert "Unsupported instance type 'plex' for instance 'plex1'" in caplog.text
 
 
+def test_parse_config_readarr_instance_is_accepted() -> None:
+    """Test that parse_config accepts readarr as a valid instance type."""
+    config = make_config(instances={'r': {'type': 'readarr', 'host': 'http://r', 'api_key': 'k', 'enabled': True}})
+    result = parse_config(config)
+    assert len(result['instances']['readarr']) == 1
+    assert result['instances']['readarr'][0]['name'] == 'r'
+
+
+def test_parse_config_whisparr_bare_instance_is_accepted() -> None:
+    """Test that parse_config accepts bare 'whisparr' as a valid instance type."""
+    config = make_config(instances={'w': {'type': 'whisparr', 'host': 'http://w', 'api_key': 'k', 'enabled': True}})
+    result = parse_config(config)
+    assert len(result['instances']['whisparr']) == 1
+    assert result['instances']['whisparr'][0]['name'] == 'w'
+
+
 def test_parse_config_whisparr_v2_instance_is_accepted() -> None:
     """Test that parse_config accepts whisparr_v2 as a valid instance type."""
     config = make_config(instances={'w2': {'type': 'whisparr_v2', 'host': 'http://w', 'api_key': 'k', 'enabled': True}})
@@ -322,14 +330,6 @@ def test_parse_config_whisparr_v3_instance_is_accepted() -> None:
     result = parse_config(config)
     assert len(result['instances']['whisparr_v3']) == 1
     assert result['instances']['whisparr_v3'][0]['name'] == 'w3'
-
-
-def test_parse_config_whisparr_bare_instance_is_accepted() -> None:
-    """Test that parse_config accepts bare 'whisparr' as a valid instance type."""
-    config = make_config(instances={'w': {'type': 'whisparr', 'host': 'http://w', 'api_key': 'k', 'enabled': True}})
-    result = parse_config(config)
-    assert len(result['instances']['whisparr']) == 1
-    assert result['instances']['whisparr'][0]['name'] == 'w'
 
 
 def test_parse_config_host_not_in_result() -> None:
@@ -786,3 +786,15 @@ def test_parse_config_invalid_action() -> None:
     }
     with pytest.raises(ValueError, match='must be a dict'):
         parse_config(config)
+
+
+def test_valid_arr_types_includes_readarr() -> None:
+    """Test that VALID_ARR_TYPES includes the readarr type string."""
+    assert 'readarr' in VALID_ARR_TYPES
+
+
+def test_valid_arr_types_includes_whisparr_types() -> None:
+    """Test that VALID_ARR_TYPES includes all three Whisparr type strings."""
+    assert 'whisparr' in VALID_ARR_TYPES
+    assert 'whisparr_v2' in VALID_ARR_TYPES
+    assert 'whisparr_v3' in VALID_ARR_TYPES

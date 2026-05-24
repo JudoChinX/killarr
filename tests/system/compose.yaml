@@ -50,6 +50,23 @@ services:
     ports:
       - "8686"
     restart: "no"
+  readarr:
+    image: linuxserver/readarr:0.4.19-nightly
+    container_name: killarr-test-readarr
+    hostname: readarr
+    environment:
+      TZ: UTC
+      PUID: "1000"
+      PGID: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 120s
+    ports:
+      - "8787"
+    restart: "no"
   fakesab:
     build:
       context: .

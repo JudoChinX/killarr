@@ -47,7 +47,7 @@
   </a>
 </p>
 
-**Killarr** is a lightweight service that detects and removes stalled downloads from Radarr, Sonarr, Lidarr, and Whisparr queues. It runs on a configurable schedule, finds items stuck with a warning status, removes them from the queue, and optionally triggers a fresh search.
+**Killarr** is a lightweight service that detects and removes stalled downloads from Radarr, Readarr, Sonarr, Lidarr, and Whisparr queues. It runs on a configurable schedule, finds items stuck with a warning status, removes them from the queue, and optionally triggers a fresh search.
 
 ## Key Features
 

@@ -15,6 +15,7 @@ import pytest
 from killarr.clients.arr import LidarrClient
 from killarr.clients.arr import QueueItem
 from killarr.clients.arr import RadarrClient
+from killarr.clients.arr import ReadarrClient
 from killarr.clients.arr import SonarrClient
 from killarr.clients.arr import WhisparrV2Client
 from killarr.clients.arr import WhisparrV3Client
@@ -448,6 +449,18 @@ _build_arr_clients_cases = {
         'expected_count': 1,
         'expected_type': LidarrClient,
     },
+    'creates_readarr_client': {
+        'instances': _make_instances_config('readarr', url='http://r:8787'),
+        'global_settings': {},
+        'expected_count': 1,
+        'expected_type': ReadarrClient,
+    },
+    'creates_whisparr_bare_client': {
+        'instances': _make_instances_config('whisparr', url='http://w:6969'),
+        'global_settings': {},
+        'expected_count': 1,
+        'expected_type': WhisparrV3Client,
+    },
     'creates_whisparr_v2_client': {
         'instances': _make_instances_config('whisparr_v2', url='http://w:6969'),
         'global_settings': {},
@@ -456,12 +469,6 @@ _build_arr_clients_cases = {
     },
     'creates_whisparr_v3_client': {
         'instances': _make_instances_config('whisparr_v3', url='http://w:6969'),
-        'global_settings': {},
-        'expected_count': 1,
-        'expected_type': WhisparrV3Client,
-    },
-    'creates_whisparr_bare_client': {
-        'instances': _make_instances_config('whisparr', url='http://w:6969'),
         'global_settings': {},
         'expected_count': 1,
         'expected_type': WhisparrV3Client,
