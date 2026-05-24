@@ -87,6 +87,12 @@ instances:
     api_key: "YOUR_WHISPARR_API_KEY"
     enabled: false
 
+  # readarr:
+  #   type: readarr
+  #   host: "http://readarr:8787"
+  #   api_key: "YOUR_READARR_API_KEY"
+  #   enabled: false
+
   # whisparr-v2:
   #   type: whisparr_v2                 # Sonarr-based (legacy Whisparr)
   #   host: "http://whisparr:6969"

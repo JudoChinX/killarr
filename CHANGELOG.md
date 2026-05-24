@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Readarr (`readarr`) as a supported instance type, using the v1 API. Titles are formatted as `'{authorName} - {bookTitle}'`.
 - Whisparr v2 (`whisparr_v2`) and Whisparr v3 (`whisparr_v3`) as supported instance types. Whisparr v2 is Sonarr-based; Whisparr v3 is Radarr-based. The bare `whisparr` type is accepted as an alias for `whisparr_v3`.
 
 ### Fixed

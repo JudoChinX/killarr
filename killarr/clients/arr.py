@@ -399,6 +399,39 @@ class RadarrClient(ArrClient):
         return 'movieIds'
 
 
+class ReadarrClient(ArrClient):
+    """Readarr queue management client."""
+
+    ENDPOINT_QUEUE = '/api/v1/queue'
+    ENDPOINT_COMMAND = '/api/v1/command'
+    ENDPOINT_TAG = '/api/v1/tag'
+    _QUEUE_EXTRA_PARAMS = {'includeUnknownBookItems': 'true'}
+
+    @property
+    @override
+    def _command_name(self) -> str:
+        return 'BookSearch'
+
+    @override
+    def _get_media_id(self, record: dict) -> int:
+        return record.get('bookId', 0)
+
+    @override
+    def _get_record_tags(self, record: dict) -> list[int]:
+        return record.get('tags', [])
+
+    @override
+    def _get_record_title(self, record: dict) -> str:
+        author_name = record.get('author', {}).get('authorName', 'Unknown Author')
+        book_title = record.get('title', f'Queue item {record.get("id", "Unknown")}')
+        return f'{author_name} - {book_title}'
+
+    @property
+    @override
+    def _id_field(self) -> str:
+        return 'bookIds'
+
+
 class SonarrClient(ArrClient):
     """Sonarr queue management client."""
 

@@ -16,6 +16,7 @@ from typing import Any
 from killarr.clients.arr import ArrClient
 from killarr.clients.arr import LidarrClient
 from killarr.clients.arr import RadarrClient
+from killarr.clients.arr import ReadarrClient
 from killarr.clients.arr import SonarrClient
 from killarr.clients.arr import WhisparrV2Client
 from killarr.clients.arr import WhisparrV3Client
@@ -46,6 +47,7 @@ _LOGGER = logging.getLogger(__name__)
 _CLIENT_MAP: dict[str, type[ArrClient]] = {
     'lidarr': LidarrClient,
     'radarr': RadarrClient,
+    'readarr': ReadarrClient,
     'sonarr': SonarrClient,
     'whisparr': WhisparrV3Client,
     'whisparr_v2': WhisparrV2Client,

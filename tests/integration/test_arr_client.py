@@ -16,6 +16,7 @@ from killarr.clients.arr import RadarrClient
 from tests.builders import ClientBuilder
 from tests.builders import LidarrQueueBuilder
 from tests.builders import RadarrQueueBuilder
+from tests.builders import ReadarrQueueBuilder
 from tests.builders import SonarrQueueBuilder
 from tests.builders import WhisparrV2QueueBuilder
 from tests.builders import WhisparrV3QueueBuilder
@@ -575,6 +576,15 @@ def test_check_connection_lidarr_uses_v1_endpoint() -> None:
     assert '/api/v1/tag' in call_url
 
 
+def test_check_connection_readarr_uses_v1_endpoint() -> None:
+    """Test that ReadarrClient.check_connection() calls the /api/v1/tag endpoint."""
+    client = ClientBuilder().readarr().build()
+    client.session.get = MagicMock(return_value=mock_http_response([]))
+    client.check_connection()
+    call_url = client.session.get.call_args.args[0]
+    assert '/api/v1/tag' in call_url
+
+
 _subclass_attr_cases = {
     'radarr_command_name': {'arr_type': 'radarr', 'attr': '_command_name', 'expected': 'MoviesSearch'},
     'radarr_id_field': {'arr_type': 'radarr', 'attr': '_id_field', 'expected': 'movieIds'},
@@ -582,6 +592,8 @@ _subclass_attr_cases = {
     'sonarr_id_field': {'arr_type': 'sonarr', 'attr': '_id_field', 'expected': 'episodeIds'},
     'lidarr_command_name': {'arr_type': 'lidarr', 'attr': '_command_name', 'expected': 'AlbumSearch'},
     'lidarr_id_field': {'arr_type': 'lidarr', 'attr': '_id_field', 'expected': 'albumIds'},
+    'readarr_command_name': {'arr_type': 'readarr', 'attr': '_command_name', 'expected': 'BookSearch'},
+    'readarr_id_field': {'arr_type': 'readarr', 'attr': '_id_field', 'expected': 'bookIds'},
 }
 
 
@@ -602,6 +614,9 @@ _endpoint_version_cases = {
     'lidarr_queue_uses_v1': {'arr_type': 'lidarr', 'endpoint_attr': 'ENDPOINT_QUEUE', 'version': 'v1'},
     'lidarr_command_uses_v1': {'arr_type': 'lidarr', 'endpoint_attr': 'ENDPOINT_COMMAND', 'version': 'v1'},
     'lidarr_tag_uses_v1': {'arr_type': 'lidarr', 'endpoint_attr': 'ENDPOINT_TAG', 'version': 'v1'},
+    'readarr_queue_uses_v1': {'arr_type': 'readarr', 'endpoint_attr': 'ENDPOINT_QUEUE', 'version': 'v1'},
+    'readarr_command_uses_v1': {'arr_type': 'readarr', 'endpoint_attr': 'ENDPOINT_COMMAND', 'version': 'v1'},
+    'readarr_tag_uses_v1': {'arr_type': 'readarr', 'endpoint_attr': 'ENDPOINT_TAG', 'version': 'v1'},
 }
 
 
@@ -909,6 +924,10 @@ _queue_extra_params_cases = {
         'arr_type': 'lidarr',
         'expected_key': 'includeUnknownAlbumItems',
     },
+    'readarr_sends_include_unknown_books': {
+        'arr_type': 'readarr',
+        'expected_key': 'includeUnknownBookItems',
+    },
     'whisparr_v2_sends_include_unknown_series': {
         'arr_type': 'whisparr_v2',
         'expected_key': 'includeUnknownSeriesItems',
@@ -944,6 +963,7 @@ _get_media_id_missing_cases = {
     'radarr_returns_zero_when_movie_id_absent': {'arr_type': 'radarr', 'record': {}},
     'sonarr_returns_zero_when_episode_id_absent': {'arr_type': 'sonarr', 'record': {}},
     'lidarr_returns_zero_when_album_id_absent': {'arr_type': 'lidarr', 'record': {}},
+    'readarr_returns_zero_when_book_id_absent': {'arr_type': 'readarr', 'record': {}},
     'whisparr_v2_returns_zero_when_episode_id_absent': {'arr_type': 'whisparr_v2', 'record': {}},
     'whisparr_v3_returns_zero_when_movie_id_absent': {'arr_type': 'whisparr_v3', 'record': {}},
 }
@@ -958,6 +978,39 @@ def test_get_media_id_returns_zero_when_key_absent(arr_type: Any, record: Any) -
     """Test that _get_media_id returns 0 for unknown items missing their media ID key."""
     client = getattr(ClientBuilder(), arr_type)().build()
     assert client._get_media_id(record) == 0
+
+
+def test_readarr_get_record_title_formats_as_author_book() -> None:
+    """Test that ReadarrClient formats titles as 'Author - Book Title'."""
+    client = ClientBuilder().readarr().build()
+    record = {'title': 'A Great Book', 'author': {'authorName': 'Jane Smith'}, 'tags': []}
+    assert client._get_record_title(record) == 'Jane Smith - A Great Book'
+
+
+def test_readarr_get_record_title_missing_author_uses_fallback() -> None:
+    """Test that ReadarrClient falls back to 'Unknown Author' when author is absent."""
+    client = ClientBuilder().readarr().build()
+    record = {'id': 99, 'title': 'A Great Book', 'tags': []}
+    assert client._get_record_title(record) == 'Unknown Author - A Great Book'
+
+
+def test_readarr_get_record_title_missing_title_uses_fallback() -> None:
+    """Test that ReadarrClient falls back to 'Queue item {id}' when title is absent."""
+    client = ClientBuilder().readarr().build()
+    record = {'id': 99, 'author': {'authorName': 'Jane Smith'}, 'tags': []}
+    assert client._get_record_title(record) == 'Jane Smith - Queue item 99'
+
+
+def test_readarr_get_stalled_items_uses_book_id() -> None:
+    """Test that ReadarrClient extracts bookId as media_id."""
+    client = ClientBuilder().readarr().with_settings(no_files={'remove': True}).build()
+    record = (
+        ReadarrQueueBuilder().with_book_id(77).with_status_messages(['No files found are eligible for import']).build()
+    )
+    client.session.get = MagicMock(return_value=mock_queue_response([record]))
+    items, _ = client.get_stalled_items()
+    assert len(items) == 1
+    assert items[0].media_id == 77
 
 
 def test_whisparr_v2_get_record_title_formats_as_performer_scene() -> None:
@@ -981,6 +1034,21 @@ def test_whisparr_v2_get_record_title_missing_title_uses_fallback() -> None:
     assert client._get_record_title(record) == 'Jane Doe - Queue item 99'
 
 
+def test_whisparr_v2_get_stalled_items_uses_episode_id() -> None:
+    """Test that WhisparrV2Client extracts episodeId as media_id (inherited from SonarrClient)."""
+    client = ClientBuilder().whisparr_v2().with_settings(no_files={'remove': True}).build()
+    record = (
+        WhisparrV2QueueBuilder()
+        .with_episode_id(42)
+        .with_status_messages(['No files found are eligible for import'])
+        .build()
+    )
+    client.session.get = MagicMock(return_value=mock_queue_response([record]))
+    items, _ = client.get_stalled_items()
+    assert len(items) == 1
+    assert items[0].media_id == 42
+
+
 def test_whisparr_v3_get_record_title_formats_as_studio_scene() -> None:
     """Test that WhisparrV3Client formats titles as 'Studio - Scene Title'."""
     client = ClientBuilder().whisparr_v3().build()
@@ -1000,21 +1068,6 @@ def test_whisparr_v3_get_record_title_missing_title_uses_fallback() -> None:
     client = ClientBuilder().whisparr_v3().build()
     record = {'id': 99, 'studioTitle': 'Acme Studio', 'tags': []}
     assert client._get_record_title(record) == 'Acme Studio - Queue item 99'
-
-
-def test_whisparr_v2_get_stalled_items_uses_episode_id() -> None:
-    """Test that WhisparrV2Client extracts episodeId as media_id (inherited from SonarrClient)."""
-    client = ClientBuilder().whisparr_v2().with_settings(no_files={'remove': True}).build()
-    record = (
-        WhisparrV2QueueBuilder()
-        .with_episode_id(42)
-        .with_status_messages(['No files found are eligible for import'])
-        .build()
-    )
-    client.session.get = MagicMock(return_value=mock_queue_response([record]))
-    items, _ = client.get_stalled_items()
-    assert len(items) == 1
-    assert items[0].media_id == 42
 
 
 def test_whisparr_v3_get_stalled_items_uses_movie_id() -> None:

@@ -248,7 +248,7 @@ killarr:
 
 When non-empty, only remove stalled items where the media has **any** of the listed tags. Tags are resolved from each \*arr instance at startup and matched case-insensitively. Leave empty (or omit) to process all stalled items regardless of tags.
 
-For Radarr, tags are checked on the queue record directly. For Sonarr, tags are checked on the series. For Lidarr, tags are checked on the artist.
+For Radarr, Readarr, and Whisparr v3, tags are checked on the queue record directly. For Sonarr and Whisparr v2, tags are checked on the series. For Lidarr, tags are checked on the artist.
 
 ```yaml
 killarr:
@@ -344,7 +344,7 @@ Settings for individual \*arr instances under the `instances:` key.
 
 #### `type` (required)
 
-**Options:** `radarr`, `sonarr`, `lidarr`, `whisparr` (v3), `whisparr_v2`, `whisparr_v3`
+**Options:** `radarr`, `readarr`, `sonarr`, `lidarr`, `whisparr` (v3), `whisparr_v2`, `whisparr_v3`
 
 The bare `whisparr` type is an alias for `whisparr_v3`.
 
@@ -467,7 +467,7 @@ Each instance is identified by a numeric index. Prefix instance fields with `KIL
 | Variable | Required | Description |
 |---|---|---|
 | `KILLARR_INSTANCE_<n>_NAME` | Yes | Unique name for this instance. |
-| `KILLARR_INSTANCE_<n>_TYPE` | Yes | `radarr`, `sonarr`, `lidarr`, `whisparr`, `whisparr_v2`, or `whisparr_v3` (case-insensitive). |
+| `KILLARR_INSTANCE_<n>_TYPE` | Yes | `radarr`, `readarr`, `sonarr`, `lidarr`, `whisparr`, `whisparr_v2`, or `whisparr_v3` (case-insensitive). |
 | `KILLARR_INSTANCE_<n>_URL` | Yes | Base URL of the instance (e.g. `http://radarr:7878`). |
 | `KILLARR_INSTANCE_<n>_API_KEY` | Yes | API key from the instance's settings page. |
 | `KILLARR_INSTANCE_<n>_ENABLED` | No | Defaults to `true`. |

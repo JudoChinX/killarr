@@ -239,6 +239,7 @@ def parse_config(config: Any) -> dict:
 
     final_instances: dict[str, list] = {
         'radarr': [],
+        'readarr': [],
         'sonarr': [],
         'lidarr': [],
         'whisparr': [],
@@ -258,7 +259,7 @@ def parse_config(config: Any) -> dict:
 
     if all_empty:
         raise ValueError(
-            "No instances defined under 'instances'. Add at least one Radarr, Sonarr, Lidarr, or Whisparr instance."
+            "No instances defined under 'instances'. Add at least one Radarr, Readarr, Sonarr, Lidarr, or Whisparr instance."
         )
 
     config['instances'] = final_instances
