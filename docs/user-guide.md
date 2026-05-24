@@ -13,6 +13,7 @@ Complete guide to installing, configuring, and operating Killarr.
   - [Global Settings](#global-settings)
   - [Stall Actions](#stall-actions)
   - [Instance Settings](#instance-settings)
+  - [Weighted Slot Allocation](#weighted-slot-allocation)
   - [Per-Instance Killarr Overrides](#per-instance-killarr-overrides)
   - [Environment Variable Expansion](#environment-variable-expansion)
   - [Environment Variable-Only Configuration](#environment-variable-only-configuration)
@@ -378,9 +379,22 @@ Instances are disabled by default as a safety measure. You must explicitly set t
 
 #### `weight`
 
-**Type:** Number | **Default:** `1`
+**Type:** Number | **Default:** `1.0`
 
 Relative priority for slot allocation when `batch_size` limits total removals per cycle. Higher weight = proportionally more removal slots from the global batch allocated to this instance.
+
+### Weighted Slot Allocation
+
+When removal is enabled (i.e., `batch_size` is not `0`), Killarr uses a weighted round-robin algorithm to distribute removal slots among active instances. This ensures that busy instances get a fair share of the global batch.
+
+By default, all instances have a `weight` of `1.0`. If you have an instance that you want to prioritize (e.g., your primary Radarr vs. a secondary Lidarr), you can increase its weight.
+
+**Example:**
+- Radarr: `weight: 2.0`
+- Sonarr: `weight: 1.0`
+- `batch_size: 6`
+
+In each round of slot allocation, Radarr will receive 2 slots for every 1 slot Sonarr receives. If both have deep backlogs, Radarr will remove 4 items and Sonarr will remove 2.
 
 ### Per-Instance Killarr Overrides
 
