@@ -892,3 +892,57 @@ def test_blocklist_action_without_search_does_not_trigger_search() -> None:
     params = client.session.delete.call_args.kwargs.get('params', {})
     assert params.get('blocklist') == 'true'
     assert not client.session.post.called
+
+
+_queue_extra_params_cases = {
+    'radarr_sends_include_unknown_movies': {
+        'arr_type': 'radarr',
+        'expected_key': 'includeUnknownMovieItems',
+    },
+    'sonarr_sends_include_unknown_series': {
+        'arr_type': 'sonarr',
+        'expected_key': 'includeUnknownSeriesItems',
+    },
+    'lidarr_sends_include_unknown_albums': {
+        'arr_type': 'lidarr',
+        'expected_key': 'includeUnknownAlbumItems',
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'arr_type, expected_key',
+    [(case['arr_type'], case['expected_key']) for case in _queue_extra_params_cases.values()],
+    ids=list(_queue_extra_params_cases.keys()),
+)
+def test_fetch_all_queue_sends_include_unknown_param(arr_type: Any, expected_key: Any) -> None:
+    """Test that _fetch_all_queue merges _QUEUE_EXTRA_PARAMS into the GET request."""
+    client = getattr(ClientBuilder(), arr_type)().build()
+    captured_params: dict[str, Any] = {}
+
+    def fake_get(_url: str, params: dict | None = None, **_kwargs: Any) -> Any:
+        if params:
+            captured_params.update(params)
+        return mock_queue_response([])
+
+    client.session.get = fake_get
+    client._fetch_all_queue()
+    assert captured_params.get(expected_key) == 'true'
+
+
+_get_media_id_missing_cases = {
+    'radarr_returns_zero_when_movie_id_absent': {'arr_type': 'radarr', 'record': {}},
+    'sonarr_returns_zero_when_episode_id_absent': {'arr_type': 'sonarr', 'record': {}},
+    'lidarr_returns_zero_when_album_id_absent': {'arr_type': 'lidarr', 'record': {}},
+}
+
+
+@pytest.mark.parametrize(
+    'arr_type, record',
+    [(case['arr_type'], case['record']) for case in _get_media_id_missing_cases.values()],
+    ids=list(_get_media_id_missing_cases.keys()),
+)
+def test_get_media_id_returns_zero_when_key_absent(arr_type: Any, record: Any) -> None:
+    """Test that _get_media_id returns 0 for unknown items missing their media ID key."""
+    client = getattr(ClientBuilder(), arr_type)().build()
+    assert client._get_media_id(record) == 0
