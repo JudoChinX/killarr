@@ -62,6 +62,7 @@ class ArrClient(ABC):
         self.retry_interval_minutes: int = settings.get('retry_interval_minutes', 0)
         self.stagger_seconds: int = settings.get('stagger_interval_seconds', 5)
         self.dry_run: bool = settings.get('dry_run', False)
+        self.fetch_page_size: int = settings.get('fetch_page_size', 500)
         self._retry_state: dict[int, datetime.datetime] = {}
         if not self.url.lower().startswith('https://'):
             _LOGGER.warning(
@@ -82,7 +83,7 @@ class ArrClient(ABC):
         """Fetch all queue records across all pages."""
         result: list[dict] = []
         current_page = 1
-        page_size = 100
+        page_size = self.fetch_page_size
 
         while True:
             url = f'{self.url}{self.ENDPOINT_QUEUE}'

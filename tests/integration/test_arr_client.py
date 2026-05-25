@@ -102,7 +102,7 @@ def test_fetch_all_queue_returns_records() -> None:
 
 def test_fetch_all_queue_paginates() -> None:
     """Test that _fetch_all_queue fetches subsequent pages when the first page is full."""
-    client = ClientBuilder().radarr().build()
+    client = ClientBuilder().radarr().with_settings(fetch_page_size=100).build()
     page1 = [RadarrQueueBuilder().with_id(index).build() for index in range(100)]
     page2 = [RadarrQueueBuilder().with_id(200).build()]
 
@@ -119,6 +119,33 @@ def test_fetch_all_queue_paginates() -> None:
     result = client._fetch_all_queue()
     assert len(result) == 101
     assert call_count == 2
+
+
+def test_client_reads_fetch_page_size_from_settings() -> None:
+    """Test that the client reads fetch_page_size from the settings dict."""
+    client = ClientBuilder().radarr().with_settings(fetch_page_size=250).build()
+    assert client.fetch_page_size == 250
+
+
+def test_fetch_page_size_default_is_500() -> None:
+    """Test that the default fetch_page_size is 500 when not specified in settings."""
+    client = ClientBuilder().radarr().build()
+    assert client.fetch_page_size == 500
+
+
+def test_fetch_all_queue_uses_configured_page_size() -> None:
+    """Test that _fetch_all_queue sends the configured fetch_page_size as the pageSize param."""
+    client = ClientBuilder().radarr().with_settings(fetch_page_size=3).build()
+    captured_params: dict[str, Any] = {}
+
+    def fake_get(_url: str, params: dict | None = None, **_kwargs: Any) -> Any:
+        if params:
+            captured_params.update(params)
+        return mock_queue_response([])
+
+    client.session.get = fake_get
+    client._fetch_all_queue()
+    assert captured_params.get('pageSize') == 3
 
 
 def test_fetch_all_queue_handles_network_error(caplog: Any) -> None:
