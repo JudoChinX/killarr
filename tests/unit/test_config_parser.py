@@ -165,6 +165,22 @@ _parse_config_cases = {
         'config_data': make_config(killarr_section={'retry_interval_minutes': '1h'}),
         'expected_error': "'killarr.retry_interval_minutes' must be of type int.",
     },
+    'fetch_page_size_defaults_to_500': {
+        'config_data': make_config(),
+        'expected_result': {'global_settings': {'fetch_page_size': 500}},
+    },
+    'fetch_page_size_accepts_one': {
+        'config_data': make_config(killarr_section={'fetch_page_size': 1}),
+        'expected_result': {'global_settings': {'fetch_page_size': 1}},
+    },
+    'fetch_page_size_rejects_zero': {
+        'config_data': make_config(killarr_section={'fetch_page_size': 0}),
+        'expected_error': "'killarr.fetch_page_size' must be at least 1.",
+    },
+    'fetch_page_size_rejects_negative': {
+        'config_data': make_config(killarr_section={'fetch_page_size': -1}),
+        'expected_error': "'killarr.fetch_page_size' must be at least 1.",
+    },
     'invalid_batch_size_raises': {
         'config_data': make_config(killarr_section={'batch_size': -2}),
         'expected_error': "'killarr.batch_size' must be 0 (disabled), -1 (unlimited), or a positive integer.",

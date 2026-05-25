@@ -111,6 +111,11 @@ SETTINGS_SCHEMA = {
         'type': list,
         'element_type': str,
     },
+    'fetch_page_size': {
+        'default': 500,
+        'type': int,
+        'min_value': 1,
+    },
     'active_hours': {
         'default': '',
         'type': str,

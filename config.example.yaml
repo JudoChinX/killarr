@@ -19,6 +19,8 @@ killarr:
   # batch_size: -1            # Remove all stalled items each cycle (unlimited)
   # batch_size: 0             # Disable removal entirely
 
+  # fetch_page_size: 500  # Records per API request when fetching the queue. Higher values reduce round trips for large queues.
+
   # interleave_instances: false # false = contiguous per instance, true = alternate across instances
 
   # --- Stall actions ---

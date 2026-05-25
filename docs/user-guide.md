@@ -266,6 +266,17 @@ killarr:
   exclude_tags: ["protected"]  # Never remove stalled items tagged "protected"
 ```
 
+#### `fetch_page_size`
+
+**Type:** Integer | **Default:** `500` | **Minimum:** `1`
+
+Number of queue records to request per API call when fetching the \*arr queue. Higher values reduce the number of round trips required for large queues but result in a larger per-request payload. The default of `500` is appropriate for most queues.
+
+```yaml
+killarr:
+  fetch_page_size: 500  # Default — fetches up to 500 records per page
+```
+
 ### Stall Actions
 
 Killarr classifies each stalled item into a category based on its `statusMessages` and applies a set of granular flags. Actions can be configured globally under `killarr:` or per instance.
@@ -442,6 +453,7 @@ Prefix global settings with `KILLARR_GLOBAL_`.
 | `KILLARR_GLOBAL_INTERVAL` | `3600` | Run interval in seconds. |
 | `KILLARR_GLOBAL_DRY_RUN` | `false` | Log removals without executing them. |
 | `KILLARR_GLOBAL_BATCH_SIZE` | `10` | Items to remove per cycle. `0` disables, `-1` is unlimited. |
+| `KILLARR_GLOBAL_FETCH_PAGE_SIZE` | `500` | Records per API request when fetching the queue. |
 | `KILLARR_GLOBAL_INTERLEAVE_INSTANCES` | `false` | Alternate items between instances during removal. |
 | `KILLARR_GLOBAL_STAGGER_INTERVAL_SECONDS` | `5` | Delay in seconds between individual removals. |
 | `KILLARR_GLOBAL_ACTIVE_HOURS` | `(none)` | Time window for removals in `HH:MM-HH:MM` format (e.g. `06:00-23:00`). |
