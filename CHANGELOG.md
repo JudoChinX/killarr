@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-05-25
+
 ### Added
 
 - Readarr (`readarr`) as a supported instance type, using the v1 API. Titles are formatted as `'{authorName} - {bookTitle}'`.
