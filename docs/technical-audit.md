@@ -47,7 +47,7 @@ To be absolutely clear, Killarr does not and will never:
 
 ## Architecture Overview
 
-Killarr is a ~1,403-line Python service with five core modules:
+Killarr is a ~1,422-line Python service with five core modules:
 
 ```
 killarr/
@@ -70,7 +70,7 @@ Each cycle:
 3. Pass status messages to `classifier.py` to categorise the stall reason
 4. Resolve action flags (`remove`, `blocklist`, `search`) for each stall category based on configuration
 5. Apply tag filtering (include/exclude) and batch size limits
-6. Sort actionable items by `removal_order` setting (`api_order`, `age_ascending`, `age_descending`)
+6. Sort actionable items by `removal_order` setting (`api_order`, `age_ascending`, `age_descending`, `alphabetical_ascending`, `alphabetical_descending`, `random`)
 7. DELETE each stalled item (with optional `removeFromClient` and `blocklist` params)
 8. POST a search command for each removed item (if `search: true`)
 9. Sleep for `interval` seconds and repeat
@@ -235,7 +235,7 @@ Killarr operates entirely within your local network:
 
 ### 1. Security Through Simplicity
 
-**Decision:** ~1,403 lines of core Python code, zero external dependencies beyond `requests` and `PyYAML`.
+**Decision:** ~1,422 lines of core Python code, zero external dependencies beyond `requests` and `PyYAML`.
 
 **Why:** Small codebases are auditable. Every line of code is a potential attack surface. By keeping the codebase minimal, security reviewers can read and understand the entire project in under an hour.
 
@@ -255,7 +255,7 @@ Killarr operates entirely within your local network:
 
 ### 4. Test Coverage as Documentation
 
-**Decision:** 365 tests covering all code paths including error conditions.
+**Decision:** 376 tests covering all code paths including error conditions.
 
 **Why:** Tests serve three purposes:
 1. Prevent regressions.
@@ -312,7 +312,7 @@ Every line of AI-generated code was reviewed, tested, and validated against requ
 
 ## Testing Strategy
 
-**Test Coverage:** 365 tests, 99.47% coverage.
+**Test Coverage:** 376 tests, 99.47% coverage.
 
 - `tests/unit/test_config_parser.py`: Configuration validation, schema defaults, shared config, env var mode — no network calls.
 - `tests/unit/test_validators.py`: Schema validation and setting constraints — no network calls.
@@ -350,14 +350,14 @@ Development (see `requirements-dev.txt`):
 
 ## File Sizes
 
-- `killarr/main.py`: 383 lines
+- `killarr/main.py`: 391 lines
 - `killarr/classifier.py`: 87 lines
 - `killarr/config_parser.py`: 266 lines
-- `killarr/validators.py`: 185 lines
-- `killarr/clients/arr.py`: 480 lines
+- `killarr/validators.py`: 197 lines
+- `killarr/clients/arr.py`: 481 lines
 - `killarr/__init__.py`: 1 line (package marker)
 - `killarr/clients/__init__.py`: 1 line (package marker)
-- **Total:** ~1,403 lines of Python
+- **Total:** ~1,422 lines of Python
 
 The small codebase size makes comprehensive security auditing feasible.
 
