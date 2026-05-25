@@ -214,13 +214,16 @@ killarr:
 
 #### `removal_order`
 
-**Type:** String | **Default:** `api_order` | **Options:** `api_order`, `age_ascending`, `age_descending`
+**Type:** String | **Default:** `api_order` | **Options:** `api_order`, `age_ascending`, `age_descending`, `alphabetical_ascending`, `alphabetical_descending`, `random`
 
 Controls the order in which stalled items are processed within a cycle.
 
 - `api_order` — process items in the order returned by the \*arr API (default)
 - `age_ascending` — process oldest stalled items first (lowest `added` timestamp first)
 - `age_descending` — process newest stalled items first (highest `added` timestamp first)
+- `alphabetical_ascending` — process items A→Z by title
+- `alphabetical_descending` — process items Z→A by title
+- `random` — shuffle the stalled item list each cycle; useful when `batch_size` limits removals per cycle and you want to spread removal pressure across the backlog rather than always processing the same items
 
 Items with no `added` timestamp sort last in `age_ascending` order and first in `age_descending` order.
 
@@ -457,7 +460,7 @@ Prefix global settings with `KILLARR_GLOBAL_`.
 | `KILLARR_GLOBAL_INTERLEAVE_INSTANCES` | `false` | Alternate items between instances during removal. |
 | `KILLARR_GLOBAL_STAGGER_INTERVAL_SECONDS` | `5` | Delay in seconds between individual removals. |
 | `KILLARR_GLOBAL_ACTIVE_HOURS` | `(none)` | Time window for removals in `HH:MM-HH:MM` format (e.g. `06:00-23:00`). |
-| `KILLARR_GLOBAL_REMOVAL_ORDER` | `api_order` | Item processing order: `api_order`, `age_ascending`, or `age_descending`. |
+| `KILLARR_GLOBAL_REMOVAL_ORDER` | `api_order` | Item processing order: `api_order`, `age_ascending`, `age_descending`, `alphabetical_ascending`, `alphabetical_descending`, or `random`. |
 | `KILLARR_GLOBAL_RETRY_INTERVAL_MINUTES` | `0` | Per-media cooldown in minutes. `0` disables. |
 | `KILLARR_GLOBAL_INCLUDE_TAGS` | `(none)` | Comma-separated tag names. |
 | `KILLARR_GLOBAL_EXCLUDE_TAGS` | `(none)` | Comma-separated tag names. |

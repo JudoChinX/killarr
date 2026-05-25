@@ -8,6 +8,7 @@ scheduled intervals.
 import datetime
 import logging
 import os
+import random
 import sys
 import time
 from pathlib import Path
@@ -91,9 +92,16 @@ def _allocate_slots(limit: int, client_backlogs: dict) -> list[tuple]:
 
 def _apply_removal_order(client_backlogs: dict, removal_order: str) -> None:
     """Sort each client's item list in-place by removal_order."""
-    if removal_order != 'api_order':
-        reverse = removal_order == 'age_descending'
-        for items in client_backlogs.values():
+    if removal_order == 'api_order':
+        return
+    for items in client_backlogs.values():
+        if removal_order == 'random':
+            random.shuffle(items)
+        elif removal_order in ('alphabetical_ascending', 'alphabetical_descending'):
+            reverse = removal_order == 'alphabetical_descending'
+            items.sort(key=lambda item: item.title.lower(), reverse=reverse)
+        else:
+            reverse = removal_order == 'age_descending'
             items.sort(key=lambda item: item.added or '9999', reverse=reverse)
 
 
