@@ -185,6 +185,22 @@ _parse_config_cases = {
         'config_data': make_config(killarr_section={'batch_size': -2}),
         'expected_error': "'killarr.batch_size' must be 0 (disabled), -1 (unlimited), or a positive integer.",
     },
+    'invalid_removal_order_raises': {
+        'config_data': make_config(killarr_section={'removal_order': 'invalid_value'}),
+        'expected_error': "'killarr.removal_order' must be one of:",
+    },
+    'removal_order_alphabetical_ascending_accepted': {
+        'config_data': make_config(killarr_section={'removal_order': 'alphabetical_ascending'}),
+        'expected_result': {'global_settings': {'removal_order': 'alphabetical_ascending'}},
+    },
+    'removal_order_alphabetical_descending_accepted': {
+        'config_data': make_config(killarr_section={'removal_order': 'alphabetical_descending'}),
+        'expected_result': {'global_settings': {'removal_order': 'alphabetical_descending'}},
+    },
+    'removal_order_random_accepted': {
+        'config_data': make_config(killarr_section={'removal_order': 'random'}),
+        'expected_result': {'global_settings': {'removal_order': 'random'}},
+    },
     'invalid_interval_raises': {
         'config_data': make_config(killarr_section={'interval': 0}),
         'expected_error': "'killarr.interval' must be at least 1.",

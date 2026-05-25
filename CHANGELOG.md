@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Readarr (`readarr`) as a supported instance type, using the v1 API. Titles are formatted as `'{authorName} - {bookTitle}'`.
 - `fetch_page_size` setting (default: `500`, min: `1`): controls the page size for *arr queue API requests. Higher values reduce round trips for large queues at the cost of a longer per-request time.
+- `removal_order` now accepts `alphabetical_ascending`, `alphabetical_descending`, and `random` in addition to the existing `api_order`, `age_ascending`, and `age_descending` values. `random` is useful when `batch_size` limits removals per cycle and you want to spread removal pressure across the backlog rather than always processing the same items.
 - Whisparr v2 (`whisparr_v2`) and Whisparr v3 (`whisparr_v3`) as supported instance types. Whisparr v2 is Sonarr-based; Whisparr v3 is Radarr-based. The bare `whisparr` type is accepted as an alias for `whisparr_v3`.
 
 ### Fixed

@@ -256,12 +256,12 @@ def test_seconds_until_window_open(start: Any, now: Any, expected_seconds: Any) 
     assert _seconds_until_window_open(start, now, today=datetime.date(2026, 4, 23)) == expected_seconds
 
 
-def _make_item(queue_id: int, added: str) -> QueueItem:
-    """Build a minimal QueueItem with the given queue_id and added timestamp."""
+def _make_item(queue_id: int, added: str, title: str = '') -> QueueItem:
+    """Build a minimal QueueItem with the given queue_id, added timestamp, and optional title."""
     return QueueItem(
         queue_id=queue_id,
         media_id=queue_id,
-        title=f'Item{queue_id}',
+        title=title if title else f'Item{queue_id}',
         remove=True,
         blocklist=False,
         search=False,
@@ -295,6 +295,14 @@ _apply_removal_order_cases = {
         ],
         'order': 'age_ascending',
     },
+    'alphabetical_ascending_sorts_a_to_z': {
+        'clients': [([_make_item(1, '', title='Zebra'), _make_item(2, '', title='Apple')], [2, 1])],
+        'order': 'alphabetical_ascending',
+    },
+    'alphabetical_descending_sorts_z_to_a': {
+        'clients': [([_make_item(1, '', title='Apple'), _make_item(2, '', title='Zebra')], [2, 1])],
+        'order': 'alphabetical_descending',
+    },
 }
 
 
@@ -311,6 +319,17 @@ def test_apply_removal_order(clients: Any, order: Any) -> None:
     for idx, (_, expected_ids) in enumerate(clients):
         result_ids = [item.queue_id for item in backlogs[mock_clients[idx]]]
         assert result_ids == expected_ids
+
+
+def test_apply_removal_order_random_shuffles_each_client() -> None:
+    """Test that random order calls shuffle on each client's item list."""
+    items_a = [_make_item(1, ''), _make_item(2, '')]
+    items_b = [_make_item(3, ''), _make_item(4, '')]
+    mock_a, mock_b = MagicMock(), MagicMock()
+    backlogs = {mock_a: list(items_a), mock_b: list(items_b)}
+    with patch('killarr.main.random.shuffle') as mock_shuffle:
+        _apply_removal_order(backlogs, 'random')
+    assert mock_shuffle.call_count == 2
 
 
 def test_run_removal_cycle_applies_removal_order_before_removal() -> None:

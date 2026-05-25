@@ -56,7 +56,7 @@
 - **Granular Stall Actions:** Assign `remove`, `blocklist`, and `search` flags per stall category — globally or per instance — for precise control over each stall type.
 - **Batch Size Controls:** Limit removals per cycle (`0` = disabled, `-1` = unlimited, `N` = global cap across all instances).
 - **Weighted Round-Robin Allocation:** Distribute the batch budget across instances by weight; interleave items from different instances or drain one at a time.
-- **Removal Ordering:** Process stalled items in API order, oldest-first, or newest-first via `removal_order`.
+- **Removal Ordering:** Process stalled items in API order, oldest-first, newest-first, A→Z, Z→A, or random order via `removal_order`.
 - **Active Hours:** Restrict removal cycles to a configured time window (e.g. `06:00-23:00`). Overnight windows are supported.
 - **Per-Media Cooldown:** Skip re-actioning the same media within a configurable interval (`retry_interval_minutes`) to avoid churn when replacements stall immediately.
 - **Tag Filtering:** Include or exclude items based on tags set in your \*arr instances.

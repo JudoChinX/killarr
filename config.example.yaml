@@ -49,7 +49,7 @@ killarr:
   #   blocklist: true
   #   search: true
 
-  # removal_order: api_order    # Item order within a cycle: api_order, age_ascending, age_descending
+  # removal_order: api_order    # Item order within a cycle: api_order, age_ascending, age_descending, alphabetical_ascending, alphabetical_descending, random
 
   # include_tags: ["active"]   # Only act on items with ANY of these tags
   # exclude_tags: ["protected"] # Skip items with ANY of these tags

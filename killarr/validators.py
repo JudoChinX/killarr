@@ -90,7 +90,14 @@ SETTINGS_SCHEMA = {
     'removal_order': {
         'default': 'api_order',
         'type': str,
-        'choices': ('age_ascending', 'age_descending', 'api_order'),
+        'choices': (
+            'age_ascending',
+            'age_descending',
+            'alphabetical_ascending',
+            'alphabetical_descending',
+            'api_order',
+            'random',
+        ),
     },
     'retry_interval_minutes': {
         'default': 0,
