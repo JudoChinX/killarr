@@ -84,7 +84,8 @@ def _parse_instance(name: str, config: dict) -> tuple[str, dict] | None:
         if not instance.get(field):
             raise ValueError(f"Missing or empty '{field}' for instance '{name}'.")
     instance.setdefault('weight', 1)
-    if not isinstance(instance['weight'], (int, float)) or instance['weight'] <= 0:
+    weight = instance['weight']
+    if isinstance(weight, bool) or not isinstance(weight, (int, float)) or weight <= 0:
         raise ValueError(f"'weight' for instance '{name}' must be a positive number.")
     result = None
     if instance.get('enabled', False):

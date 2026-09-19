@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Boolean values are no longer accepted for integer settings or for an instance's `weight`. Previously a value like `batch_size: true` was silently treated as `1` instead of being rejected.
+
 ## [0.1.0] - 2026-05-25
 
 ### Added

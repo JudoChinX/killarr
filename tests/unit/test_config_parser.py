@@ -221,6 +221,12 @@ _parse_config_cases = {
         ),
         'expected_error': "'weight' for instance 'r' must be a positive number.",
     },
+    'instance_weight_bool_raises': {
+        'config_data': make_config(
+            instances={'r': {'type': 'radarr', 'host': 'http://x', 'api_key': 'k', 'enabled': True, 'weight': True}}
+        ),
+        'expected_error': "'weight' for instance 'r' must be a positive number.",
+    },
     'wrong_type_for_setting_raises': {
         'config_data': make_config(killarr_section={'interval': 'not-an-int'}),
         'expected_error': "'killarr.interval' must be of type int.",
