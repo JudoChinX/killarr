@@ -77,7 +77,7 @@ class ArrClient(ABC):
     @property
     @abstractmethod
     def _command_name(self) -> str:
-        """Return the API command name for a fresh search (e.g. 'MoviesSearch')."""
+        """The API command name for a fresh search (e.g. 'MoviesSearch')."""
 
     def _fetch_all_queue(self) -> list[dict]:
         """Fetch all queue records across all pages."""
@@ -117,7 +117,7 @@ class ArrClient(ABC):
     @property
     @abstractmethod
     def _id_field(self) -> str:
-        """Return the payload ID field name for a search command (e.g. 'movieIds')."""
+        """The payload ID field name for a search command (e.g. 'movieIds')."""
 
     def _is_stalled(self, record: dict) -> bool:
         """Return True if the record is considered stalled by the arr app."""
