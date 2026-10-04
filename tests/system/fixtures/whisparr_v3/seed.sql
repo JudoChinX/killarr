@@ -5,11 +5,11 @@ INSERT OR REPLACE INTO Tags (Id, Label) VALUES (1, 'test-tag');
 INSERT OR REPLACE INTO MovieMetadata (
     Id, ForeignId, MetadataSource, Images, Title, SortTitle, CleanTitle,
     OriginalLanguage, Status, Runtime, ReleaseDate, Year, Ratings, Genres,
-    Recommendations, Credits, ItemType, StudioTitle
+    Recommendations, ItemType, StudioTitle
 ) VALUES (
     1, 'scene-001', 0, '[]', 'Test Scene 01', 'test scene 01', 'testscene01',
     1, 3, 30, '2024-01-15', 2024, '{}', '[]',
-    '[]', '[]', 0, 'Test Studio'
+    '[]', 0, 'Test Studio'
 );
 
 INSERT OR REPLACE INTO Movies (

@@ -1,6 +1,7 @@
 """Tests for killarr validators."""
 
 # pylint: disable=protected-access
+import re
 from typing import Any
 
 import pytest
@@ -81,6 +82,40 @@ def test_validate_global_settings_active_hours(settings: Any, expect_error: bool
     """Test that validate_global_settings calls through to _validate_active_hours."""
     if expect_error:
         with pytest.raises(ValueError):
+            validate_global_settings(dict(settings), SETTINGS_SCHEMA)
+    else:
+        validate_global_settings(dict(settings), SETTINGS_SCHEMA)
+
+
+_validate_global_settings_bool_for_int_cases = {
+    'batch_size_true_rejected': {
+        'settings': {'batch_size': True},
+        'expected_error': "'killarr.batch_size' must be of type int.",
+    },
+    'retry_interval_minutes_false_rejected': {
+        'settings': {'retry_interval_minutes': False},
+        'expected_error': "'killarr.retry_interval_minutes' must be of type int.",
+    },
+    'fetch_page_size_true_rejected': {
+        'settings': {'fetch_page_size': True},
+        'expected_error': "'killarr.fetch_page_size' must be of type int.",
+    },
+    'dry_run_true_still_accepted': {
+        'settings': {'dry_run': True},
+        'expected_error': None,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'settings, expected_error',
+    [(case['settings'], case['expected_error']) for case in _validate_global_settings_bool_for_int_cases.values()],
+    ids=list(_validate_global_settings_bool_for_int_cases.keys()),
+)
+def test_validate_global_settings_bool_for_int(settings: Any, expected_error: Any) -> None:
+    """Test that boolean values are rejected for integer settings but accepted for boolean settings."""
+    if expected_error:
+        with pytest.raises(ValueError, match=re.escape(expected_error)):
             validate_global_settings(dict(settings), SETTINGS_SCHEMA)
     else:
         validate_global_settings(dict(settings), SETTINGS_SCHEMA)

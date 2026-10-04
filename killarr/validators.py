@@ -39,7 +39,8 @@ def _validate_setting(
     element_type: type | None = None,
 ) -> None:
     """Validate a single setting value against its schema definition."""
-    if not isinstance(value, expected_type):
+    # bool is a subclass of int, so isinstance(True, int) is True; exclude it explicitly.
+    if not isinstance(value, expected_type) or (expected_type is int and isinstance(value, bool)):
         raise ValueError(f"'{prefix}.{setting}' must be of type {expected_type.__name__}.")
 
     if expected_type is int:
