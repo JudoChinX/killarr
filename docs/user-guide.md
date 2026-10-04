@@ -416,6 +416,8 @@ In each round of slot allocation, Radarr will receive 2 slots for every 1 slot S
 
 Any global `killarr:` setting (including actions) can be overridden for a specific instance by adding a `killarr:` subsection under that instance.
 
+Overrides are validated at startup with the same rules as the global section, including on disabled instances. An invalid override reports its location, for example `'instances.Radarr-4K.killarr.batch_size' must be of type int.`
+
 ```yaml
 killarr:
   batch_size: 10

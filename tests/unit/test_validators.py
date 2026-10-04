@@ -9,6 +9,7 @@ import pytest
 from killarr.validators import SETTINGS_SCHEMA
 from killarr.validators import _validate_active_hours
 from killarr.validators import validate_global_settings
+from killarr.validators import validate_schema_setting
 from killarr.validators import validate_stall_action_settings
 
 _validate_active_hours_cases = {
@@ -59,6 +60,34 @@ def test_validate_active_hours(value: str, expect_error: bool) -> None:
             _validate_active_hours(value)
     else:
         _validate_active_hours(value)
+
+
+_validate_active_hours_prefix_cases = {
+    'invalid_value_uses_prefix': {
+        'value': '25:00-06:00',
+        'prefix': 'instances.x.killarr',
+        'expected_error': "'instances.x.killarr.active_hours' start time '25:00' is not a valid 24-hour time.",
+    },
+    'valid_value_passes_with_prefix': {
+        'value': '22:00-06:00',
+        'prefix': 'instances.x.killarr',
+        'expected_error': None,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'value, prefix, expected_error',
+    [(case['value'], case['prefix'], case['expected_error']) for case in _validate_active_hours_prefix_cases.values()],
+    ids=list(_validate_active_hours_prefix_cases.keys()),
+)
+def test_validate_active_hours_prefix(value: str, prefix: str, expected_error: Any) -> None:
+    """Test that _validate_active_hours reports the caller-supplied prefix in error messages."""
+    if expected_error:
+        with pytest.raises(ValueError, match=re.escape(expected_error)):
+            _validate_active_hours(value, prefix)
+    else:
+        _validate_active_hours(value, prefix)
 
 
 _validate_global_settings_active_hours_cases = {
@@ -207,6 +236,54 @@ def test_validate_removal_order(settings: Any, expected_value: Any, expect_error
         assert settings_copy['removal_order'] == expected_value
 
 
+_validate_schema_setting_cases = {
+    'type_error_uses_prefix': {
+        'setting': 'batch_size',
+        'value': 'x',
+        'expected_error': "'p.batch_size' must be of type int.",
+    },
+    'min_value_error_uses_prefix': {
+        'setting': 'fetch_page_size',
+        'value': 0,
+        'expected_error': "'p.fetch_page_size' must be at least 1.",
+    },
+    'choices_error_uses_prefix': {
+        'setting': 'removal_order',
+        'value': 'x',
+        'expected_error': "'p.removal_order' must be one of:",
+    },
+    'element_type_error_uses_prefix': {
+        'setting': 'include_tags',
+        'value': [1],
+        'expected_error': "'p.include_tags' must be a list of str values.",
+    },
+    'validator_delegation_uses_prefix': {
+        'setting': 'active_hours',
+        'value': '25:00-06:00',
+        'expected_error': "'p.active_hours' start time '25:00' is not a valid 24-hour time.",
+    },
+    'valid_value_passes': {
+        'setting': 'batch_size',
+        'value': 5,
+        'expected_error': None,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'setting, value, expected_error',
+    [(case['setting'], case['value'], case['expected_error']) for case in _validate_schema_setting_cases.values()],
+    ids=list(_validate_schema_setting_cases.keys()),
+)
+def test_validate_schema_setting(setting: str, value: Any, expected_error: Any) -> None:
+    """Test that validate_schema_setting applies every schema rule and reports the supplied prefix."""
+    if expected_error:
+        with pytest.raises(ValueError, match=re.escape(expected_error)):
+            validate_schema_setting(setting, value, SETTINGS_SCHEMA[setting], 'p')
+    else:
+        validate_schema_setting(setting, value, SETTINGS_SCHEMA[setting], 'p')
+
+
 _validate_stall_action_settings_cases = {
     'string_value_raises': {
         'settings': {'generic': 'remove'},
@@ -291,3 +368,31 @@ def test_validate_stall_action_settings(settings: Any, expect_error: bool) -> No
             validate_stall_action_settings(settings)
     else:
         validate_stall_action_settings(settings)
+
+
+_validate_stall_action_settings_prefix_cases = {
+    'not_a_dict_uses_prefix': {
+        'settings': {'generic': 'remove'},
+        'prefix': 'instances.x.killarr',
+        'expected_error': "'instances.x.killarr.generic' must be a dict of action flags, got str.",
+    },
+    'search_without_remove_uses_prefix': {
+        'settings': {'generic': {'search': True}},
+        'prefix': 'instances.x.killarr',
+        'expected_error': "'instances.x.killarr.generic.search' requires 'remove' to also be True.",
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'settings, prefix, expected_error',
+    [
+        (case['settings'], case['prefix'], case['expected_error'])
+        for case in _validate_stall_action_settings_prefix_cases.values()
+    ],
+    ids=list(_validate_stall_action_settings_prefix_cases.keys()),
+)
+def test_validate_stall_action_settings_prefix(settings: Any, prefix: str, expected_error: str) -> None:
+    """Test that validate_stall_action_settings reports the caller-supplied prefix in error messages."""
+    with pytest.raises(ValueError, match=re.escape(expected_error)):
+        validate_stall_action_settings(settings, prefix)

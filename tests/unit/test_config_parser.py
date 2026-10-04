@@ -303,6 +303,138 @@ _parse_config_cases = {
             'instances': {'radarr': [{'generic': {'remove': True, 'blocklist': False}}]},
         },
     },
+    'instance_override_not_a_dict_raises': {
+        'config_data': make_config(
+            instances={'r': {'type': 'radarr', 'host': 'http://r', 'api_key': 'k', 'enabled': True, 'killarr': 'bad'}}
+        ),
+        'expected_error': "'instances.r.killarr' must be a YAML mapping.",
+    },
+    'instance_override_wrong_type_raises': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'batch_size': 'lots'},
+                }
+            }
+        ),
+        'expected_error': "'instances.r.killarr.batch_size' must be of type int.",
+    },
+    'instance_override_below_min_raises': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'fetch_page_size': 0},
+                }
+            }
+        ),
+        'expected_error': "'instances.r.killarr.fetch_page_size' must be at least 1.",
+    },
+    'instance_override_bad_choice_raises': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'removal_order': 'sideways'},
+                }
+            }
+        ),
+        'expected_error': "'instances.r.killarr.removal_order' must be one of:",
+    },
+    'instance_override_bad_active_hours_raises': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'active_hours': '25:00-06:00'},
+                }
+            }
+        ),
+        'expected_error': "'instances.r.killarr.active_hours' start time '25:00' is not a valid 24-hour time.",
+    },
+    'instance_override_stall_action_not_dict_raises': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'no_upgrade': 'remove'},
+                }
+            }
+        ),
+        'expected_error': "'instances.r.killarr.no_upgrade' must be a dict of action flags, got str.",
+    },
+    'instance_override_stall_action_bad_flag_raises': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'generic': {'nuke': True}},
+                }
+            }
+        ),
+        'expected_error': "'instances.r.killarr.generic' contains unknown flag 'nuke'.",
+    },
+    'instance_override_blocklist_without_remove_raises': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'generic': {'blocklist': True}},
+                }
+            }
+        ),
+        'expected_error': "'instances.r.killarr.generic.blocklist' requires 'remove' to also be True.",
+    },
+    'instance_override_disabled_instance_still_validated': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': False,
+                    'killarr': {'batch_size': 'lots'},
+                }
+            }
+        ),
+        'expected_error': "'instances.r.killarr.batch_size' must be of type int.",
+    },
+    'instance_override_unknown_key_ignored': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'not_a_setting': 1},
+                }
+            }
+        ),
+        'expected_result': {'instances': {'radarr': [{'name': 'r', 'not_a_setting': 1}]}},
+    },
 }
 
 
