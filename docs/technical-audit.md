@@ -143,7 +143,7 @@ Each cycle:
 
 **Key Methods:**
 - `get_stalled_items()`: Fetches the full queue, filters for stalled items, classifies them via `classifier.py`, and applies tag filtering and batch limits. Returns a tuple of `(actionable_items, skip_stats)` where each `QueueItem` carries `queue_id`, `media_id`, `title`, `remove`, `blocklist`, `search`, `category`, `messages`, and `added` (ISO 8601 timestamp from the \*arr API).
-- `_fetch_all_queue()`: Paginates through the \*arr queue endpoint until all records are retrieved.
+- `_fetch_all_queue()`: Paginates through the \*arr queue endpoint until all records are retrieved, bounded per page by the configurable `fetch_timeout`.
 - `_is_stalled()`: Returns `True` if `trackedDownloadStatus == "warning"`.
 - `execute_removal()`: Removes a single queue item by delegating to `_remove_single()`.
 - `_trigger_search()`: POSTs a search command to the \*arr command endpoint.
@@ -161,6 +161,8 @@ Each cycle:
 | `/api/v3/queue/{id}` (Radarr/Sonarr/Whisparr), `/api/v1/queue/{id}` (Lidarr/Readarr) | DELETE | Remove stalled queue item | Per stalled item | **Write** |
 | `/api/v3/command` (Radarr/Sonarr/Whisparr), `/api/v1/command` (Lidarr/Readarr) | POST | Trigger fresh search | Per removal (if action is `retry` or `blocklist`) | **Write** |
 | `/api/v3/tag` (Radarr/Sonarr/Whisparr), `/api/v1/tag` (Lidarr/Readarr) | GET | Resolve tag names to IDs | Startup only (if tags configured) | Read-only |
+
+**Timeouts:** The queue GET is bounded by the configurable `fetch_timeout` (default 30 seconds). The DELETE, POST, and tag GET calls use the fixed 15-second `REQUEST_TIMEOUT` because they do not scale with queue size.
 
 **Search Commands Sent:**
 - Radarr / Whisparr v3: `{"name": "MoviesSearch", "movieIds": [<id>]}`

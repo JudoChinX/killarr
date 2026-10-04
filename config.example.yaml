@@ -20,6 +20,7 @@ killarr:
   # batch_size: 0             # Disable removal entirely
 
   # fetch_page_size: 500  # Records per API request when fetching the queue. Higher values reduce round trips for large queues.
+  # fetch_timeout: 30     # Seconds to wait for each queue page response. Raise for very large queues or slow hosts.
 
   # interleave_instances: false # false = contiguous per instance, true = alternate across instances
 

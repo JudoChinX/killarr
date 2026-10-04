@@ -124,6 +124,11 @@ SETTINGS_SCHEMA = {
         'type': int,
         'min_value': 1,
     },
+    'fetch_timeout': {
+        'default': 30,
+        'type': int,
+        'min_value': 1,
+    },
     'active_hours': {
         'default': '',
         'type': str,
