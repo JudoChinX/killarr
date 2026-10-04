@@ -56,6 +56,7 @@ _CLIENT_MAP: dict[str, type[ArrClient]] = {
     'whisparr_v3': WhisparrV3Client,
 }
 _MAX_CONNECTION_ATTEMPTS: int = 3
+_MIN_SLEEP_SECONDS: float = 1.0
 _RETRY_DELAY_SECONDS: int = 10
 
 
@@ -241,9 +242,11 @@ def _main_loop(active_clients: list[ArrClient], settings: dict) -> None:
                 _LOGGER.info(f'Outside active hours ({active_hours}). Sleeping {secs}s until window opens.')
                 time.sleep(secs)
                 continue
+        cycle_start = time.monotonic()
         _run_removal_cycle(active_clients, settings)
-        _LOGGER.info(f'--- Cycle complete. Sleeping for {run_interval_seconds}s. ---')
-        time.sleep(run_interval_seconds)
+        remaining = max(_MIN_SLEEP_SECONDS, run_interval_seconds - (time.monotonic() - cycle_start))
+        _LOGGER.info(f'--- Cycle complete. Next cycle in {math.ceil(remaining)}s. ---')
+        time.sleep(remaining)
 
 
 def _run_removal_cycle(active_clients: list[Any], settings: dict) -> None:
