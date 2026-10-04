@@ -588,6 +588,34 @@ def test_build_arr_clients_type(instances: Any, global_settings: Any, expected_c
     assert isinstance(clients[0], expected_type)
 
 
+_build_arr_clients_registration_log_cases = {
+    'radarr_default_weight': {
+        'instances': _make_instances_config('radarr'),
+        'expected_log': 'Registered Radarr instance: TestRadarr (Weight: 1.0)',
+    },
+    'whisparr_alias_shows_v3': {
+        'instances': _make_instances_config('whisparr', url='http://w:6969'),
+        'expected_log': 'Registered WhisparrV3 instance: TestRadarr (Weight: 1.0)',
+    },
+    'whisparr_v2_class_name': {
+        'instances': _make_instances_config('whisparr_v2', url='http://w:6969', weight=2.5),
+        'expected_log': 'Registered WhisparrV2 instance: TestRadarr (Weight: 2.5)',
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'instances, expected_log',
+    [(case['instances'], case['expected_log']) for case in _build_arr_clients_registration_log_cases.values()],
+    ids=list(_build_arr_clients_registration_log_cases.keys()),
+)
+def test_build_arr_clients_registration_log(instances: Any, expected_log: Any, caplog: Any) -> None:
+    """Test that build_arr_clients logs the resolved client class name and weight for each instance."""
+    with caplog.at_level(logging.INFO):
+        build_arr_clients(instances, {})
+    assert expected_log in caplog.text
+
+
 def test_build_arr_clients_sets_name() -> None:
     """Test that the client name is taken from the instance config."""
     clients = build_arr_clients(_make_instances_config(name='MyRadarr'), {})

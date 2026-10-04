@@ -13,6 +13,16 @@ from killarr.classifier import classify
 from killarr.validators import VALID_ACTIONS
 
 _LOGGER = logging.getLogger(__name__)
+_MAX_ERROR_BODY_CHARS = 300
+
+
+def _error_detail(error: requests.RequestException, api_key: str) -> str:
+    """Return a redacted, single-line, truncated response body suffix for an error log, or ''."""
+    body = error.response.text if error.response is not None else ''
+    if api_key:
+        body = body.replace(api_key, '[REDACTED]')
+    body = ' '.join(''.join(char if char.isprintable() else ' ' for char in body).split())
+    return f' — {body[:_MAX_ERROR_BODY_CHARS]}' if body else ''
 
 
 class QueueItem(NamedTuple):
@@ -60,6 +70,7 @@ class ArrClient(ABC):
         """
         self.name = name
         self.url = url.rstrip('/')
+        self._api_key = api_key
         self.settings = settings
         self.weight = weight
         self.batch_size: int = settings.get('batch_size', 10)
@@ -186,7 +197,9 @@ class ArrClient(ABC):
                 _LOGGER.info(f'[{self.name}] Removed ({action_label}, {item.category}): {item.title} ({index}/{total})')
                 self._record_retry_interval(item.media_id, item.title)
         except requests.RequestException as error:
-            _LOGGER.error(f'[{self.name}] Failed to remove {item.title} (ID: {item.queue_id}): {error}')
+            _LOGGER.error(
+                f'[{self.name}] Failed to remove {item.title} (ID: {item.queue_id}): {error}{_error_detail(error, self._api_key)}'
+            )
             return
 
         if item.search:
@@ -236,7 +249,9 @@ class ArrClient(ABC):
             response.raise_for_status()
             _LOGGER.debug(f'[{self.name}] Triggered search for: {title}')
         except requests.RequestException as error:
-            _LOGGER.warning(f'[{self.name}] Failed to trigger search for {title} (ID: {media_id}): {error}')
+            _LOGGER.warning(
+                f'[{self.name}] Failed to trigger search for {title} (ID: {media_id}): {error}{_error_detail(error, self._api_key)}'
+            )
 
     def check_connection(self) -> bool:
         """Return True if the instance tag endpoint responds successfully.
