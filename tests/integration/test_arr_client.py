@@ -13,6 +13,7 @@ import requests
 
 from killarr.clients.arr import QueueItem
 from killarr.clients.arr import RadarrClient
+from killarr.clients.arr import _error_detail
 from tests.builders import ClientBuilder
 from tests.builders import LidarrQueueBuilder
 from tests.builders import RadarrQueueBuilder
@@ -566,6 +567,40 @@ def test_execute_removal_delete_failure_logs_error(caplog: Any) -> None:
         client.execute_removal(item, 1, 1)
     assert 'Failed to remove' in caplog.text
     assert not client.session.post.called
+
+
+def test_execute_removal_delete_failure_logs_response_body(caplog: Any) -> None:
+    """Test that a failed DELETE with a response body includes the body in the error log."""
+    client = ClientBuilder().radarr().build()
+    error = requests.exceptions.HTTPError(response=MagicMock(text='{"message": "Queue item not found"}'))
+    client.session.delete = MagicMock(side_effect=error)
+    with caplog.at_level(logging.ERROR):
+        item = QueueItem(1, 10, 'Movie', True, False, False, 'generic', [])
+        client.execute_removal(item, 1, 1)
+    assert '— {"message": "Queue item not found"}' in caplog.text
+
+
+def test_execute_removal_search_failure_logs_response_body(caplog: Any) -> None:
+    """Test that a failed search POST with a response body includes the body in the warning log."""
+    client = ClientBuilder().radarr().build()
+    client.session.delete = MagicMock(return_value=mock_http_response())
+    error = requests.exceptions.HTTPError(response=MagicMock(text='{"message": "Invalid movie id"}'))
+    client.session.post = MagicMock(side_effect=error)
+    with caplog.at_level(logging.WARNING):
+        item = QueueItem(1, 10, 'Movie', True, False, True, 'generic', [])
+        client.execute_removal(item, 1, 1)
+    assert '— {"message": "Invalid movie id"}' in caplog.text
+
+
+def test_error_detail_truncates_body() -> None:
+    """Test that _error_detail keeps only the first 300 characters of the response body."""
+    error = requests.exceptions.HTTPError(response=MagicMock(text='x' * 400))
+    assert _error_detail(error) == f' — {"x" * 300}'
+
+
+def test_error_detail_empty_without_response() -> None:
+    """Test that _error_detail returns an empty string when the error carries no response."""
+    assert _error_detail(requests.exceptions.ConnectionError('down')) == ''
 
 
 def test_execute_removal_404_logs_cascade(caplog: Any) -> None:

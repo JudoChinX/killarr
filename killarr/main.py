@@ -329,7 +329,8 @@ def build_arr_clients(
                 weight=instance.get('weight', 1.0),
             )
             clients.append(client)
-            _LOGGER.info(f'Registered {arr_type.capitalize()} instance: {instance["name"]}')
+            display_name = client_class.__name__.removesuffix('Client')
+            _LOGGER.info(f'Registered {display_name} instance: {instance["name"]} (Weight: {client.weight})')
     return clients
 
 

@@ -13,6 +13,13 @@ from killarr.classifier import classify
 from killarr.validators import VALID_ACTIONS
 
 _LOGGER = logging.getLogger(__name__)
+_MAX_ERROR_BODY_CHARS = 300
+
+
+def _error_detail(error: requests.RequestException) -> str:
+    """Return a truncated response body suffix for an error log, or '' if there is no body."""
+    body = error.response.text if error.response is not None else ''
+    return f' — {body[:_MAX_ERROR_BODY_CHARS]}' if body else ''
 
 
 class QueueItem(NamedTuple):
@@ -186,7 +193,9 @@ class ArrClient(ABC):
                 _LOGGER.info(f'[{self.name}] Removed ({action_label}, {item.category}): {item.title} ({index}/{total})')
                 self._record_retry_interval(item.media_id, item.title)
         except requests.RequestException as error:
-            _LOGGER.error(f'[{self.name}] Failed to remove {item.title} (ID: {item.queue_id}): {error}')
+            _LOGGER.error(
+                f'[{self.name}] Failed to remove {item.title} (ID: {item.queue_id}): {error}{_error_detail(error)}'
+            )
             return
 
         if item.search:
@@ -236,7 +245,9 @@ class ArrClient(ABC):
             response.raise_for_status()
             _LOGGER.debug(f'[{self.name}] Triggered search for: {title}')
         except requests.RequestException as error:
-            _LOGGER.warning(f'[{self.name}] Failed to trigger search for {title} (ID: {media_id}): {error}')
+            _LOGGER.warning(
+                f'[{self.name}] Failed to trigger search for {title} (ID: {media_id}): {error}{_error_detail(error)}'
+            )
 
     def check_connection(self) -> bool:
         """Return True if the instance tag endpoint responds successfully.

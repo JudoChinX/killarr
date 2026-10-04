@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The run `interval` is now measured from the start of one cycle to the start of the next. Previously the full interval was slept after each cycle finished, so long cycles (large batches with a stagger) pushed every subsequent cycle later. The cycle-complete log line now reports the actual seconds until the next cycle.
+- The startup registration line now shows the resolved client type and weight, for example `Registered WhisparrV3 instance: Whisparr (Weight: 1)`. Failed queue removals and search commands now include the first 300 characters of the *arr response body in the log, which makes API-side rejections diagnosable.
 
 ### Fixed
 
