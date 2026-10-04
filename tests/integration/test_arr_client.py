@@ -595,12 +595,30 @@ def test_execute_removal_search_failure_logs_response_body(caplog: Any) -> None:
 def test_error_detail_truncates_body() -> None:
     """Test that _error_detail keeps only the first 300 characters of the response body."""
     error = requests.exceptions.HTTPError(response=MagicMock(text='x' * 400))
-    assert _error_detail(error) == f' — {"x" * 300}'
+    assert _error_detail(error, 'key') == f' — {"x" * 300}'
 
 
 def test_error_detail_empty_without_response() -> None:
     """Test that _error_detail returns an empty string when the error carries no response."""
-    assert _error_detail(requests.exceptions.ConnectionError('down')) == ''
+    assert _error_detail(requests.exceptions.ConnectionError('down'), 'key') == ''
+
+
+def test_error_detail_empty_for_empty_body() -> None:
+    """Test that _error_detail returns an empty string when the response body is empty."""
+    error = requests.exceptions.HTTPError(response=MagicMock(text=''))
+    assert _error_detail(error, 'key') == ''
+
+
+def test_error_detail_redacts_api_key() -> None:
+    """Test that _error_detail replaces an echoed API key before truncating the body."""
+    error = requests.exceptions.HTTPError(response=MagicMock(text='{"apiKey": "secret123"}'))
+    assert _error_detail(error, 'secret123') == ' — {"apiKey": "[REDACTED]"}'
+
+
+def test_error_detail_flattens_multiline_body() -> None:
+    """Test that _error_detail collapses newlines and control characters into single spaces."""
+    error = requests.exceptions.HTTPError(response=MagicMock(text='<html>\n  <h1>502</h1>\r\n\x00</html>\n'))
+    assert _error_detail(error, 'key') == ' — <html> <h1>502</h1> </html>'
 
 
 def test_execute_removal_404_logs_cascade(caplog: Any) -> None:
