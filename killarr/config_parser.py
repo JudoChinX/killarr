@@ -13,6 +13,7 @@ from killarr.validators import SETTINGS_SCHEMA
 from killarr.validators import VALID_ARR_TYPES
 from killarr.validators import parse_hhmm
 from killarr.validators import validate_global_settings
+from killarr.validators import validate_schema_setting
 from killarr.validators import validate_stall_action_settings
 
 _LOGGER = logging.getLogger(__name__)
@@ -87,6 +88,13 @@ def _parse_instance(name: str, config: dict) -> tuple[str, dict] | None:
     weight = instance['weight']
     if isinstance(weight, bool) or not isinstance(weight, (int, float)) or weight <= 0:
         raise ValueError(f"'weight' for instance '{name}' must be a positive number.")
+    override_prefix = f'instances.{name}.killarr'
+    if not isinstance(killarr_overrides, dict):
+        raise ValueError(f"'{override_prefix}' must be a YAML mapping.")
+    for setting, value in killarr_overrides.items():
+        if setting in SETTINGS_SCHEMA:
+            validate_schema_setting(setting, value, SETTINGS_SCHEMA[setting], override_prefix)
+    validate_stall_action_settings(killarr_overrides, override_prefix)
     result = None
     if instance.get('enabled', False):
         # Promote killarr overrides to top-level so main.py can pick them up

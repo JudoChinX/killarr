@@ -111,7 +111,7 @@ Each cycle:
 - `load_config()`: Reads `config.yaml` from disk, expands `${VAR}` placeholders, delegates to `parse_config()`.
 - `load_config_from_env()`: Reads `KILLARR_GLOBAL_*` and `KILLARR_INSTANCE_<n>_*` environment variables, constructs an equivalent config dict, delegates to `parse_config()`.
 - `parse_config()`: Validates and normalises the loaded configuration: applies schema defaults, validates types and ranges, groups enabled instances by type.
-- `_parse_instance()`: Validates each instance entry, renames `host` to `url` for internal use, extracts and promotes per-instance `killarr:` overrides.
+- `_parse_instance()`: Validates each instance entry, renames `host` to `url` for internal use, validates the per-instance `killarr:` override block via `validate_schema_setting()` and `validate_stall_action_settings()`, then promotes the overrides onto the instance.
 
 **No network activity:** Pure configuration parsing; never makes HTTP requests.
 
@@ -123,6 +123,7 @@ Each cycle:
 
 **Key Functions:**
 - `validate_global_settings()`: Applies defaults and validates all settings against their schema definitions.
+- `validate_schema_setting()`: Validates one setting value against its schema definition with a caller-supplied error prefix.
 - `validate_stall_action_settings()`: Validates any stall category action values present in settings.
 
 **No network activity:** Pure validation logic.
