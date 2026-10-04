@@ -335,7 +335,7 @@ class ArrClient(ABC):
                 )
             )
 
-            if self.batch_size > 0 and len(items) >= self.batch_size:
+            if 0 < self.batch_size <= len(items):
                 break
 
         return items, skip_stats
