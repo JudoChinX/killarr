@@ -109,8 +109,8 @@ def _apply_removal_order(client_backlogs: dict, removal_order: str) -> None:
 def _calculate_eta(item_count: int, stagger_seconds: int) -> str:
     """Calculate and format estimated time for batch processing."""
     result = ''
-    if stagger_seconds > 0 and item_count > 0:
-        eta = datetime.timedelta(seconds=item_count * stagger_seconds)
+    if stagger_seconds > 0 and item_count > 1:
+        eta = datetime.timedelta(seconds=(item_count - 1) * stagger_seconds)
         result = f', 1 every {stagger_seconds}s, ETA: {eta}'
     return result
 
