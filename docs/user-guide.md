@@ -141,7 +141,7 @@ Settings under the `killarr:` top-level key. All settings have defaults and the 
 
 **Type:** Integer | **Default:** `3600` | **Minimum:** `1`
 
-Seconds to wait between removal cycles.
+Seconds between the start of one removal cycle and the start of the next. Time spent fetching queues and staggering removals is subtracted from the wait, so long cycles do not push the schedule later. If a cycle takes longer than the interval, or leaves less than one second of it, the next one starts one second after it finishes.
 
 ```yaml
 killarr:

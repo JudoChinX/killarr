@@ -73,7 +73,7 @@ Each cycle:
 6. Sort actionable items by `removal_order` setting (`api_order`, `age_ascending`, `age_descending`, `alphabetical_ascending`, `alphabetical_descending`, `random`)
 7. DELETE each stalled item (with optional `removeFromClient` and `blocklist` params)
 8. POST a search command for each removed item (if `search: true`)
-9. Sleep for `interval` seconds and repeat
+9. Sleep for `interval` minus the cycle's elapsed time (minimum one second) and repeat
 
 ---
 

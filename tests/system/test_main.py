@@ -26,6 +26,7 @@ from killarr.main import _fmt_action
 from killarr.main import _format_cycle_info
 from killarr.main import _get_setting
 from killarr.main import _is_within_active_hours
+from killarr.main import _main_loop
 from killarr.main import _run_removal_cycle
 from killarr.main import _seconds_until_window_open
 from killarr.main import build_arr_clients
@@ -438,6 +439,63 @@ def test_run_loop_no_active_hours_runs_cycle(caplog: Any) -> None:
 
     assert len(cycle_calls) == 1
     assert 'Outside active hours' not in caplog.text
+
+
+_main_loop_sleep_cases = {
+    'sleeps_remaining_interval': {
+        'monotonic_values': [0.0, 50.0],
+        'interval': 3600,
+        'expected_sleep': 3550.0,
+        'expected_log': 'Next cycle in 3550s.',
+    },
+    'sleeps_minimum_when_cycle_equals_interval': {
+        'monotonic_values': [0.0, 3600.0],
+        'interval': 3600,
+        'expected_sleep': 1.0,
+        'expected_log': 'Next cycle in 1s.',
+    },
+    'sleeps_minimum_when_cycle_exceeds_interval': {
+        'monotonic_values': [0.0, 5000.0],
+        'interval': 3600,
+        'expected_sleep': 1.0,
+        'expected_log': 'Next cycle in 1s.',
+    },
+    'rounds_fractional_remaining_up_in_log': {
+        'monotonic_values': [0.0, 0.4],
+        'interval': 10,
+        'expected_sleep': 9.6,
+        'expected_log': 'Next cycle in 10s.',
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'monotonic_values, interval, expected_sleep, expected_log',
+    [
+        (case['monotonic_values'], case['interval'], case['expected_sleep'], case['expected_log'])
+        for case in _main_loop_sleep_cases.values()
+    ],
+    ids=list(_main_loop_sleep_cases.keys()),
+)
+def test_main_loop_sleep(
+    monotonic_values: Any, interval: Any, expected_sleep: Any, expected_log: Any, caplog: Any
+) -> None:
+    """Test that _main_loop sleeps the interval minus the cycle's elapsed time, with a one-second floor."""
+    sleeps: list[float] = []
+
+    def fake_sleep(secs: float) -> None:
+        sleeps.append(secs)
+        raise KeyboardInterrupt
+
+    with patch('killarr.main._run_removal_cycle'):
+        with patch('killarr.main.time.monotonic', side_effect=monotonic_values):
+            with patch('time.sleep', side_effect=fake_sleep):
+                with caplog.at_level(logging.INFO):
+                    with pytest.raises(KeyboardInterrupt):
+                        _main_loop([], {'interval': interval, 'active_hours': ''})
+
+    assert sleeps == [expected_sleep]
+    assert expected_log in caplog.text
 
 
 def test_log_killarr_start_shows_active_hours(caplog: Any) -> None:
@@ -911,7 +969,7 @@ def test_run_unrecognized_source_warns(monkeypatch: Any, caplog: Any) -> None:
 
 
 def test_run_loop_executes_cycle_and_sleeps(monkeypatch: Any) -> None:
-    """Test that run() executes a removal cycle and sleeps for the configured interval."""
+    """Test that run() executes a removal cycle and sleeps for the configured interval minus elapsed time."""
     monkeypatch.delenv('KILLARR_CONFIG_SOURCE', raising=False)
     config = {
         'global_settings': {'interval': 10},
@@ -932,9 +990,10 @@ def test_run_loop_executes_cycle_and_sleeps(monkeypatch: Any) -> None:
     queue_data = _load_fixture('radarr', 'queue.json')
     with patch('killarr.main._load_config_from_paths', return_value=config):
         with patch('requests.Session.get', return_value=mock_http_response(queue_data)):
-            with patch('time.sleep', side_effect=fake_sleep):
-                with pytest.raises(KeyboardInterrupt):
-                    run()
+            with patch('killarr.main.time.monotonic', side_effect=[0.0, 0.0]):
+                with patch('time.sleep', side_effect=fake_sleep):
+                    with pytest.raises(KeyboardInterrupt):
+                        run()
     assert sleep_calls == [10]
 
 

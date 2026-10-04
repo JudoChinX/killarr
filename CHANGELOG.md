@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `fetch_timeout` setting (default `30` seconds, minimum `1`) controlling how long to wait for each page of the queue response. It can be set globally or per instance. Raise it for instances with very large queues where the previous hardcoded 30-second limit was exceeded. Tag lookups, connection checks, queue deletes, and search commands continue to use a fixed 15-second timeout.
 
+### Changed
+
+- The run `interval` is now measured from the start of one cycle to the start of the next. Previously the full interval was slept after each cycle finished, so long cycles (large batches with a stagger) pushed every subsequent cycle later. The cycle-complete log line now reports the actual seconds until the next cycle.
+
 ### Fixed
 
 - Boolean values are no longer accepted for integer settings or for an instance's `weight`. Previously a value like `batch_size: true` was silently treated as `1` instead of being rejected.
