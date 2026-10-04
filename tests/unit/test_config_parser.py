@@ -465,6 +465,20 @@ _parse_config_cases = {
         ),
         'expected_result': {'instances': {'radarr': [{'fetch_timeout': 90}]}},
     },
+    'instance_fetch_timeout_override_rejects_zero': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'fetch_timeout': 0},
+                }
+            }
+        ),
+        'expected_error': "'instances.r.killarr.fetch_timeout' must be at least 1.",
+    },
 }
 
 
