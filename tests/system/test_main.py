@@ -243,6 +243,16 @@ _seconds_until_window_open_cases = {
         'now': datetime.time(12, 0),
         'expected_seconds': 43200,
     },
+    'sub_second_remainder_rounds_up': {
+        'start': datetime.time(22, 0),
+        'now': datetime.time(21, 59, 59, 700000),
+        'expected_seconds': 1,
+    },
+    'fractional_seconds_round_up': {
+        'start': datetime.time(22, 0),
+        'now': datetime.time(21, 59, 58, 100000),
+        'expected_seconds': 2,
+    },
 }
 
 
