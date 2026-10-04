@@ -280,6 +280,17 @@ killarr:
   fetch_page_size: 500  # Default — fetches up to 500 records per page
 ```
 
+#### `fetch_timeout`
+
+**Type:** Integer | **Default:** `30` | **Minimum:** `1`
+
+Seconds to wait for each page of the \*arr queue response. Raise this if you see `Failed to fetch queue` with a read timeout on instances with very large queues or slow storage. Tag lookups, connection checks, queue deletes, and search commands use a fixed 15-second timeout that this setting does not affect.
+
+```yaml
+killarr:
+  fetch_timeout: 30  # Default — raise for very large queues or slow hosts
+```
+
 ### Stall Actions
 
 Killarr classifies each stalled item into a category based on its `statusMessages` and applies a set of granular flags. Actions can be configured globally under `killarr:` or per instance.
@@ -459,6 +470,7 @@ Prefix global settings with `KILLARR_GLOBAL_`.
 | `KILLARR_GLOBAL_DRY_RUN` | `false` | Log removals without executing them. |
 | `KILLARR_GLOBAL_BATCH_SIZE` | `10` | Items to remove per cycle. `0` disables, `-1` is unlimited. |
 | `KILLARR_GLOBAL_FETCH_PAGE_SIZE` | `500` | Records per API request when fetching the queue. |
+| `KILLARR_GLOBAL_FETCH_TIMEOUT` | `30` | Seconds to wait for each queue page response. |
 | `KILLARR_GLOBAL_INTERLEAVE_INSTANCES` | `false` | Alternate items between instances during removal. |
 | `KILLARR_GLOBAL_STAGGER_INTERVAL_SECONDS` | `5` | Delay in seconds between individual removals. |
 | `KILLARR_GLOBAL_ACTIVE_HOURS` | `(none)` | Time window for removals in `HH:MM-HH:MM` format (e.g. `06:00-23:00`). |
@@ -582,6 +594,7 @@ If you have media that should never be auto-removed (e.g., seeding torrents, man
 1. Wrong URL in `config.yaml` — missing `http://`, wrong port.
 2. \*arr instance is unreachable from the Killarr container.
 3. Docker networking not configured correctly.
+4. Very large queue exceeding `fetch_timeout` — raise the setting.
 
 #### "401 Unauthorized" or "403 Forbidden"
 

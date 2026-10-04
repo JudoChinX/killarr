@@ -35,6 +35,10 @@ class ArrClient(ABC):
     ENDPOINT_QUEUE = '/api/v3/queue'
     ENDPOINT_COMMAND = '/api/v3/command'
     ENDPOINT_TAG = '/api/v3/tag'
+    # Fixed timeout for small control-plane calls (tag resolution, connection checks, queue
+    # deletes, search commands). These do not scale with queue size and must stay fast so startup
+    # probes and removals fail fast, so this is intentionally not configurable via fetch_timeout.
+    REQUEST_TIMEOUT = 15
     _QUEUE_EXTRA_PARAMS: dict[str, str] = {}
 
     def __init__(
@@ -63,6 +67,7 @@ class ArrClient(ABC):
         self.stagger_seconds: int = settings.get('stagger_interval_seconds', 5)
         self.dry_run: bool = settings.get('dry_run', False)
         self.fetch_page_size: int = settings.get('fetch_page_size', 500)
+        self.fetch_timeout: int = settings.get('fetch_timeout', 30)
         self._retry_state: dict[int, datetime.datetime] = {}
         if not self.url.lower().startswith('https://'):
             _LOGGER.warning(
@@ -89,7 +94,7 @@ class ArrClient(ABC):
             url = f'{self.url}{self.ENDPOINT_QUEUE}'
             params: dict[str, str | int] = {'page': current_page, 'pageSize': page_size, **self._QUEUE_EXTRA_PARAMS}
             try:
-                response = self.session.get(url, params=params, timeout=30)
+                response = self.session.get(url, params=params, timeout=self.fetch_timeout)
                 response.raise_for_status()
                 records = response.json().get('records', [])
                 result.extend(records)
@@ -170,7 +175,7 @@ class ArrClient(ABC):
 
         url = f'{self.url}{self.ENDPOINT_QUEUE}/{item.queue_id}'
         try:
-            response = self.session.delete(url, params=params, timeout=15)
+            response = self.session.delete(url, params=params, timeout=self.REQUEST_TIMEOUT)
             if response.status_code == 404:
                 _LOGGER.info(
                     f'[{self.name}] Removed ({action_label}, {item.category}, cascade): {item.title} ({index}/{total})'
@@ -203,7 +208,7 @@ class ArrClient(ABC):
         if include_names or exclude_names:
             url = f'{self.url}{self.ENDPOINT_TAG}'
             try:
-                response = self.session.get(url, timeout=15)
+                response = self.session.get(url, timeout=self.REQUEST_TIMEOUT)
                 response.raise_for_status()
                 tag_map = {tag['label'].lower(): tag['id'] for tag in response.json()}
                 self._include_tag_ids = self._resolve_tag_names(tag_map, include_names)
@@ -227,7 +232,7 @@ class ArrClient(ABC):
         url = f'{self.url}{self.ENDPOINT_COMMAND}'
         payload = {'name': self._command_name, self._id_field: [media_id]}
         try:
-            response = self.session.post(url, json=payload, timeout=15)
+            response = self.session.post(url, json=payload, timeout=self.REQUEST_TIMEOUT)
             response.raise_for_status()
             _LOGGER.debug(f'[{self.name}] Triggered search for: {title}')
         except requests.RequestException as error:
@@ -241,7 +246,7 @@ class ArrClient(ABC):
         """
         url = f'{self.url}{self.ENDPOINT_TAG}'
         try:
-            response = self.session.get(url, timeout=15)
+            response = self.session.get(url, timeout=self.REQUEST_TIMEOUT)
             response.raise_for_status()
             return True
         except requests.RequestException:

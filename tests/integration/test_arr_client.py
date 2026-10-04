@@ -133,6 +133,60 @@ def test_fetch_page_size_default_is_500() -> None:
     assert client.fetch_page_size == 500
 
 
+def test_client_reads_fetch_timeout_from_settings() -> None:
+    """Test that the client reads fetch_timeout from the settings dict."""
+    client = ClientBuilder().radarr().with_settings(fetch_timeout=45).build()
+    assert client.fetch_timeout == 45
+
+
+def test_fetch_all_queue_uses_fetch_timeout() -> None:
+    """Test that the queue fetch uses the configured fetch_timeout."""
+    client = ClientBuilder().radarr().with_settings(fetch_timeout=45).build()
+    client.session.get = MagicMock(return_value=mock_queue_response([]))
+    client._fetch_all_queue()
+    assert client.session.get.call_args.kwargs['timeout'] == 45
+
+
+def test_fetch_all_queue_default_timeout() -> None:
+    """Test that the queue fetch defaults to a 30-second timeout when fetch_timeout is unset."""
+    client = ClientBuilder().radarr().build()
+    client.session.get = MagicMock(return_value=mock_queue_response([]))
+    client._fetch_all_queue()
+    assert client.session.get.call_args.kwargs['timeout'] == 30
+
+
+def test_resolve_tag_ids_uses_request_timeout() -> None:
+    """Test that tag resolution uses the fixed REQUEST_TIMEOUT rather than fetch_timeout."""
+    with patch('requests.Session.get', return_value=mock_tag_response([])) as mock_get:
+        ClientBuilder().radarr().with_settings(fetch_timeout=45, include_tags=['x']).build()
+    assert mock_get.call_args.kwargs['timeout'] == RadarrClient.REQUEST_TIMEOUT
+
+
+def test_check_connection_uses_request_timeout() -> None:
+    """Test that check_connection uses the fixed REQUEST_TIMEOUT rather than fetch_timeout."""
+    client = ClientBuilder().radarr().with_settings(fetch_timeout=45).build()
+    client.session.get = MagicMock(return_value=mock_http_response([]))
+    client.check_connection()
+    assert client.session.get.call_args.kwargs['timeout'] == RadarrClient.REQUEST_TIMEOUT
+
+
+def test_remove_single_uses_request_timeout() -> None:
+    """Test that the queue DELETE uses the fixed REQUEST_TIMEOUT rather than fetch_timeout."""
+    client = ClientBuilder().radarr().with_settings(fetch_timeout=45).build()
+    client.session.delete = MagicMock(return_value=mock_http_response())
+    client.execute_removal(QueueItem(1, 10, 'Movie', True, False, False, 'generic', []), 1, 1)
+    assert client.session.delete.call_args.kwargs['timeout'] == RadarrClient.REQUEST_TIMEOUT
+
+
+def test_trigger_search_uses_request_timeout() -> None:
+    """Test that the search command POST uses the fixed REQUEST_TIMEOUT rather than fetch_timeout."""
+    client = ClientBuilder().radarr().with_settings(fetch_timeout=45).build()
+    client.session.delete = MagicMock(return_value=mock_http_response())
+    client.session.post = MagicMock(return_value=mock_http_response())
+    client.execute_removal(QueueItem(1, 10, 'Movie', True, False, True, 'generic', []), 1, 1)
+    assert client.session.post.call_args.kwargs['timeout'] == RadarrClient.REQUEST_TIMEOUT
+
+
 def test_fetch_all_queue_uses_configured_page_size() -> None:
     """Test that _fetch_all_queue sends the configured fetch_page_size as the pageSize param."""
     client = ClientBuilder().radarr().with_settings(fetch_page_size=3).build()

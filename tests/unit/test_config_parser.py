@@ -181,6 +181,22 @@ _parse_config_cases = {
         'config_data': make_config(killarr_section={'fetch_page_size': -1}),
         'expected_error': "'killarr.fetch_page_size' must be at least 1.",
     },
+    'fetch_timeout_defaults_to_30': {
+        'config_data': make_config(),
+        'expected_result': {'global_settings': {'fetch_timeout': 30}},
+    },
+    'fetch_timeout_accepts_one': {
+        'config_data': make_config(killarr_section={'fetch_timeout': 1}),
+        'expected_result': {'global_settings': {'fetch_timeout': 1}},
+    },
+    'fetch_timeout_rejects_zero': {
+        'config_data': make_config(killarr_section={'fetch_timeout': 0}),
+        'expected_error': "'killarr.fetch_timeout' must be at least 1.",
+    },
+    'fetch_timeout_rejects_non_int': {
+        'config_data': make_config(killarr_section={'fetch_timeout': '30'}),
+        'expected_error': "'killarr.fetch_timeout' must be of type int.",
+    },
     'invalid_batch_size_raises': {
         'config_data': make_config(killarr_section={'batch_size': -2}),
         'expected_error': "'killarr.batch_size' must be 0 (disabled), -1 (unlimited), or a positive integer.",
@@ -435,6 +451,20 @@ _parse_config_cases = {
         ),
         'expected_result': {'instances': {'radarr': [{'name': 'r', 'not_a_setting': 1}]}},
     },
+    'instance_fetch_timeout_override_promoted': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'fetch_timeout': 90},
+                }
+            }
+        ),
+        'expected_result': {'instances': {'radarr': [{'fetch_timeout': 90}]}},
+    },
 }
 
 
@@ -679,6 +709,18 @@ _load_config_from_env_cases = {
         'expected_result': {
             'global_settings': {'interval': 1800, 'batch_size': 5},
             'instances': {'radarr': [{'name': 'MyRadarr', 'api_key': 'envkey'}]},
+        },
+    },
+    'fetch_timeout_from_env': {
+        'env_vars': {
+            'KILLARR_GLOBAL_FETCH_TIMEOUT': '45',
+            'KILLARR_INSTANCE_0_NAME': 'R',
+            'KILLARR_INSTANCE_0_TYPE': 'radarr',
+            'KILLARR_INSTANCE_0_URL': 'http://r:7878',
+            'KILLARR_INSTANCE_0_API_KEY': 'k',
+        },
+        'expected_result': {
+            'global_settings': {'fetch_timeout': 45},
         },
     },
     'defaults_when_no_globals': {
