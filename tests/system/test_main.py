@@ -448,6 +448,12 @@ _main_loop_sleep_cases = {
         'expected_sleep': 3550.0,
         'expected_log': 'Next cycle in 3550s.',
     },
+    'sleeps_minimum_when_cycle_equals_interval': {
+        'monotonic_values': [0.0, 3600.0],
+        'interval': 3600,
+        'expected_sleep': 1.0,
+        'expected_log': 'Next cycle in 1s.',
+    },
     'sleeps_minimum_when_cycle_exceeds_interval': {
         'monotonic_values': [0.0, 5000.0],
         'interval': 3600,
