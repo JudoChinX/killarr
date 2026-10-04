@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Boolean values are no longer accepted for integer settings or for an instance's `weight`. Previously a value like `batch_size: true` was silently treated as `1` instead of being rejected.
 - Per-instance `killarr:` overrides are now validated at startup, including on disabled instances, the same as the top-level `killarr:` section. Previously an invalid override such as `batch_size: "lots"` or a stall category set to a string passed configuration validation and surfaced later as a runtime error, in the worst case crashing mid-cycle. Error messages name the instance, for example `'instances.Radarr-4K.killarr.batch_size' must be of type int.`
 - Active hours no longer spams the log when less than one second remains before the window opens. The seconds-until-open calculation now rounds up instead of truncating, so at least one second is always slept.
+- Corrected an off-by-one error in the removal ETA. The ETA now reflects `N - 1` stagger intervals for `N` items, matching actual sleep behavior. Single-item batches no longer display an ETA.
 
 ## [0.1.0] - 2026-05-25
 

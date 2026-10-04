@@ -51,10 +51,20 @@ _calculate_eta_cases = {
         'stagger_seconds': 5,
         'expected': '',
     },
+    'single_item_returns_empty': {
+        'item_count': 1,
+        'stagger_seconds': 5,
+        'expected': '',
+    },
     'with_stagger_and_items': {
         'item_count': 2,
         'stagger_seconds': 5,
-        'expected': ', 1 every 5s, ETA: 0:00:10',
+        'expected': ', 1 every 5s, ETA: 0:00:05',
+    },
+    'ten_items_nine_intervals': {
+        'item_count': 10,
+        'stagger_seconds': 5,
+        'expected': ', 1 every 5s, ETA: 0:00:45',
     },
 }
 
