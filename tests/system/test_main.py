@@ -131,6 +131,18 @@ _format_cycle_info_cases = {
         'skip_stats': {'total_evaluated': 5, 'ignored': 1, 'tag_filtered': 1, 'retry_interval': 1},
         'expected': '[Sonarr] Found 1 items to remove (Evaluated: 5, Skipped: 3).',
     },
+    'appends_dead_pending_when_nonzero': {
+        'client_name': 'Lidarr',
+        'item_count': 1,
+        'skip_stats': {'total_evaluated': 6, 'ignored': 1, 'tag_filtered': 0, 'retry_interval': 0, 'dead_pending': 2},
+        'expected': '[Lidarr] Found 1 items to remove (Evaluated: 6, Skipped: 1, Dead pending: 2).',
+    },
+    'omits_dead_pending_when_zero': {
+        'client_name': 'Lidarr',
+        'item_count': 1,
+        'skip_stats': {'total_evaluated': 6, 'ignored': 1, 'tag_filtered': 0, 'retry_interval': 0, 'dead_pending': 0},
+        'expected': '[Lidarr] Found 1 items to remove (Evaluated: 6, Skipped: 1).',
+    },
 }
 
 
@@ -685,6 +697,7 @@ def _make_mock_client(name: str = 'MockClient', stalled_items: list | None = Non
         'tag_filtered': 0,
         'not_stalled': 0,
         'retry_interval': 0,
+        'dead_pending': 0,
     }
     client.get_stalled_items.return_value = (actual_items, stats)
     return client
@@ -697,6 +710,25 @@ def test_run_removal_cycle_logs_no_stalled_when_empty(caplog: Any) -> None:
         _run_removal_cycle([client], {})
     assert 'No stalled items' in caplog.text
     assert '(Evaluated: 0)' in caplog.text
+
+
+def test_run_removal_cycle_logs_dead_pending_when_no_stalled(caplog: Any) -> None:
+    """Test that the 'No stalled items' line reports dead-download candidates still in their grace period."""
+    client = _make_mock_client(name='Lidarr', stalled_items=[])
+    client.get_stalled_items.return_value = (
+        [],
+        {
+            'total_evaluated': 1,
+            'ignored': 0,
+            'tag_filtered': 0,
+            'not_stalled': 0,
+            'retry_interval': 0,
+            'dead_pending': 1,
+        },
+    )
+    with caplog.at_level(logging.INFO):
+        _run_removal_cycle([client], {})
+    assert 'No stalled items found this cycle (Evaluated: 1, Dead pending: 1).' in caplog.text
 
 
 def test_run_removal_cycle_logs_found_items_with_summary(caplog: Any) -> None:
@@ -895,6 +927,7 @@ def test_log_killarr_start_shows_handling_actions(caplog: Any) -> None:
         _log_killarr_start([MagicMock()], {'default': {'remove': True}})
     assert 'Handling:' in caplog.text
     assert 'default=remove' in caplog.text
+    assert 'dead_download=remove' in caplog.text
 
 
 def test_log_killarr_start_empty_dict_results_in_ignore(caplog: Any) -> None:
