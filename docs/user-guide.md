@@ -307,7 +307,7 @@ killarr:
 
 ### Stall Actions
 
-Killarr classifies each stalled item into a category based on its `statusMessages` and applies a set of granular flags. Actions can be configured globally under `killarr:` or per instance.
+Killarr classifies each stalled item into a category based on its `statusMessages` (or into `dead_download` based on its queue state) and applies a set of granular flags. Actions can be configured globally under `killarr:` or per instance.
 
 #### Flags
 

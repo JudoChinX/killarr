@@ -67,7 +67,7 @@ config.yaml → config_parser.py → main.py → ArrClient instances → classif
 Each cycle:
 1. Fetch the full queue from each \*arr instance (paginated)
 2. Filter client-side for `trackedDownloadStatus == "warning"`, plus dead-download candidates (`trackedDownloadStatus == "ok"`, `trackedDownloadState == "downloading"`, and `sizeleft == 0` or `status == "warning"`) that have stayed candidates for `dead_download_minutes`
-3. Pass status messages to `classifier.py` to categorise the stall reason
+3. Pass status messages to `classifier.py` to categorize the stall reason (dead downloads are assigned `dead_download` directly, without `classifier.py`)
 4. Resolve action flags (`remove`, `blocklist`, `search`) for each stall category based on configuration
 5. Apply tag filtering (include/exclude) and batch size limits
 6. Sort actionable items by `removal_order` setting (`api_order`, `age_ascending`, `age_descending`, `alphabetical_ascending`, `alphabetical_descending`, `random`)
@@ -110,7 +110,7 @@ Each cycle:
 **Key Functions:**
 - `load_config()`: Reads `config.yaml` from disk, expands `${VAR}` placeholders, delegates to `parse_config()`.
 - `load_config_from_env()`: Reads `KILLARR_GLOBAL_*` and `KILLARR_INSTANCE_<n>_*` environment variables, constructs an equivalent config dict, delegates to `parse_config()`.
-- `parse_config()`: Validates and normalises the loaded configuration: applies schema defaults, validates types and ranges, groups enabled instances by type.
+- `parse_config()`: Validates and normalizes the loaded configuration: applies schema defaults, validates types and ranges, groups enabled instances by type.
 - `_parse_instance()`: Validates each instance entry, renames `host` to `url` for internal use, validates the per-instance `killarr:` override block via `validate_schema_setting()` and `validate_stall_action_settings()`, then promotes the overrides onto the instance.
 
 **No network activity:** Pure configuration parsing; never makes HTTP requests.
@@ -263,7 +263,7 @@ Killarr operates entirely within your local network:
 
 **Why:** Tests serve three purposes:
 1. Prevent regressions.
-2. Document expected behaviour.
+2. Document expected behavior.
 3. Prove security-relevant code works as claimed.
 
 ### 5. No Secrets in Code

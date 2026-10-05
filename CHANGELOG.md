@@ -113,7 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Queue fetch with client-side stall filtering (`trackedDownloadStatus == "warning"`)
-- Stall reason classification: inspects `statusMessages` to categorise stalls (e.g., `no_upgrade`, `manual_import`, `missing_items`)
+- Stall reason classification: inspects `statusMessages` to categorize stalls (e.g., `no_upgrade`, `manual_import`, `missing_items`)
 - Named action dispatch: assign `ignore`, `remove`, `retry`, or `blocklist` actions per stall category (resolves globally or per instance)
 - Batch size controls: `0` (disabled), `-1` (unlimited), `N > 0` (limit removals per cycle)
 - `stagger_interval_seconds`: wait between individual removal operations
