@@ -37,15 +37,17 @@ All contributions must meet the following standards:
 
 ### Automated Checks
 
-All pushes automatically run pre-push hooks that enforce:
+Every pull request and every push to `main` runs the CI workflow (`.github/workflows/ci.yml`), which enforces:
 
 - **Ruff** (linting and formatting).
 - **Pylint** (code quality).
 - **Mypy** (type checking).
 - **Bandit** (security scanning).
-- **Pytest** (test suite).
+- **Yamllint** (YAML linting).
+- **pip-audit** (dependency vulnerability scanning).
+- **Pytest** (test suite, plus Docker system tests in a separate job).
 
-You can run these checks manually:
+No local git hooks are installed, so run these checks yourself before pushing:
 
 ```bash
 # Linting and formatting
@@ -62,6 +64,12 @@ bandit -r killarr/ -lll
 # Code quality
 pylint killarr/ tests/
 
+# YAML linting
+yamllint .
+
+# Dependency audit
+pip-audit -r requirements.txt
+
 # Run tests
 pytest
 pytest tests/integration/test_arr_client.py -v  # Run specific test file
@@ -70,7 +78,7 @@ pytest tests/integration/test_arr_client.py::test_function_name -v  # Run specif
 
 ### Code Style Requirements
 
-All submissions must pass the automated checks listed above (Ruff, Pylint, Mypy, Bandit, Pytest).
+All submissions must pass the automated checks listed above (Ruff, Pylint, Mypy, Bandit, Yamllint, pip-audit, Pytest).
 
 For detailed coding conventions — naming, docstrings, type hints, testing patterns, and more — see the [Style Guide](docs/style-guide.md).
 
