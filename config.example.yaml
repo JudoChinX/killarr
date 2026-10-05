@@ -21,6 +21,7 @@ killarr:
 
   # fetch_page_size: 500  # Records per API request when fetching the queue. Higher values reduce round trips for large queues.
   # fetch_timeout: 30     # Seconds to wait for each queue page response. Raise for very large queues or slow hosts.
+  # dead_download_minutes: 360  # Minutes a dead download must persist before it is classified as dead_download. 0 disables.
 
   # interleave_instances: false # false = contiguous per instance, true = alternate across instances
 
@@ -46,6 +47,10 @@ killarr:
   #   remove: true
   # tba_title:         # Episode title not yet announced — omit to ignore (default)
   # dangerous_file:    # Fake/malicious releases (.exe, .iso)
+  #   remove: true
+  #   blocklist: true
+  #   search: true
+  # dead_download:     # Dead in the download client but not flagged by the *arr app (after dead_download_minutes)
   #   remove: true
   #   blocklist: true
   #   search: true

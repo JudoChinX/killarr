@@ -28,6 +28,7 @@ Complete guide to installing, configuring, and operating Killarr.
 - [Upgrading](#upgrading)
   - [v0.0.5 — Action flags](#v005--action-flags)
   - [v0.0.6 — Config key renames](#v006--config-key-renames)
+  - [v0.2.0 — Dead downloads](#v020--dead-downloads)
 
 ---
 
@@ -245,6 +246,19 @@ killarr:
   retry_interval_minutes: 30  # Skip re-actioning the same media for 30 minutes
 ```
 
+#### `dead_download_minutes`
+
+**Type:** Integer | **Default:** `360` | **Minimum:** `0`
+
+Grace period in minutes before a dead download is classified as `dead_download`. A queue record is a dead-download candidate when the \*arr app reports it as healthy (`trackedDownloadStatus: ok`) and still downloading (`trackedDownloadState: downloading`), but either nothing is left to download (`sizeleft: 0`) or the download client reports a warning (`status: warning`). A failed NZBGet post-process with `Mark Status: BAD` is a typical example. The record must stay a candidate for this many minutes before Killarr acts on it, so normal post-processing and unpacking are never touched. Set it to `0` to disable dead-download detection.
+
+Candidates still inside the grace period are counted as `Dead pending: N` in the cycle summary. The grace period is tracked in memory, so restarting Killarr starts every candidate's clock over. That only delays removal by one grace period.
+
+```yaml
+killarr:
+  dead_download_minutes: 360  # Default — act on dead downloads after 6 hours
+```
+
 #### `include_tags`
 
 **Type:** List of strings | **Default:** `[]`
@@ -293,7 +307,7 @@ killarr:
 
 ### Stall Actions
 
-Killarr classifies each stalled item into a category based on its `statusMessages` and applies a set of granular flags. Actions can be configured globally under `killarr:` or per instance.
+Killarr classifies each stalled item into a category based on its `statusMessages` (or into `dead_download` based on its queue state) and applies a set of granular flags. Actions can be configured globally under `killarr:` or per instance.
 
 #### Flags
 
@@ -328,6 +342,7 @@ Killarr uses a hierarchical approach to resolve actions for each stall category:
 | `tba_title` | "TBA title" (common in Sonarr for unannounced episodes). |
 | `dangerous_file` | "Potentially dangerous file extension" (e.g., `.exe`, `.iso`). |
 | `no_messages` | Stall detected but no status messages were provided by the \*arr app. |
+| `dead_download` | The \*arr app reports the download as healthy, but nothing is left to download or the download client reports a warning, and it has stayed that way for `dead_download_minutes`. |
 | `unknown` | Status messages are present but did not match any known patterns. |
 
 #### Configuration Example
@@ -476,6 +491,7 @@ Prefix global settings with `KILLARR_GLOBAL_`.
 | `KILLARR_GLOBAL_ACTIVE_HOURS` | `(none)` | Time window for removals in `HH:MM-HH:MM` format (e.g. `06:00-23:00`). |
 | `KILLARR_GLOBAL_REMOVAL_ORDER` | `api_order` | Item processing order: `api_order`, `age_ascending`, `age_descending`, `alphabetical_ascending`, `alphabetical_descending`, or `random`. |
 | `KILLARR_GLOBAL_RETRY_INTERVAL_MINUTES` | `0` | Per-media cooldown in minutes. `0` disables. |
+| `KILLARR_GLOBAL_DEAD_DOWNLOAD_MINUTES` | `360` | Minutes a dead download must persist before it is classified as `dead_download`. `0` disables. |
 | `KILLARR_GLOBAL_INCLUDE_TAGS` | `(none)` | Comma-separated tag names. |
 | `KILLARR_GLOBAL_EXCLUDE_TAGS` | `(none)` | Comma-separated tag names. |
 | `KILLARR_GLOBAL_DEFAULT` | `(none)` | Fallback flags for all unconfigured categories as JSON (e.g. `{"remove":true,"blocklist":true,"search":true}`). |
@@ -487,6 +503,7 @@ Prefix global settings with `KILLARR_GLOBAL_`.
 | `KILLARR_GLOBAL_TBA_TITLE` | `(none)` | Flags for `tba_title` category. |
 | `KILLARR_GLOBAL_DANGEROUS_FILE` | `(none)` | Flags for `dangerous_file` category. |
 | `KILLARR_GLOBAL_NO_MESSAGES` | `(none)` | Flags for `no_messages` category. |
+| `KILLARR_GLOBAL_DEAD_DOWNLOAD` | `(none)` | Flags for `dead_download` category. |
 | `KILLARR_GLOBAL_UNKNOWN` | `(none)` | Flags for `unknown` category. |
 
 #### Instance Settings
@@ -607,7 +624,7 @@ If you have media that should never be auto-removed (e.g., seeding torrents, man
 If you believe items are stalled but Killarr is not finding them:
 
 1. **Enable debug logging** to see every queue record evaluated (`LOG_LEVEL=DEBUG`). You will now see detailed skip reasons (e.g., `action: ignore`, `tag filter`, or `not_stalled`).
-2. **Verify in \*arr UI:** Go to Activity → Queue. Killarr detects items with "Warning" status.
+2. **Verify in \*arr UI:** Go to Activity → Queue. Killarr detects items with "Warning" status. It also detects dead downloads that the \*arr app shows as still downloading, but only after they stay dead for `dead_download_minutes` (default 6 hours). Until then they are counted as `Dead pending: N` in the cycle summary.
 
 
 ### "chmod 644" Reminder
@@ -720,6 +737,27 @@ killarr:
     blocklist: true
     search: true
 ```
+
+---
+
+### v0.2.0 — Dead downloads
+
+Killarr now detects dead downloads that the \*arr app never marks as stalled and classifies them as `dead_download` after the `dead_download_minutes` grace period (default 6 hours).
+
+`dead_download` follows the normal fallback, so if you configure a `default` action, it now also applies to dead downloads. To keep the rest of your `default` behavior but leave dead downloads alone, opt out explicitly:
+
+```yaml
+killarr:
+  default:
+    remove: true
+    blocklist: true
+    search: true
+  dead_download: {}
+```
+
+To turn off detection entirely, set `dead_download_minutes: 0`.
+
+The grace period is tracked in memory. After a restart, every candidate's clock starts over, so a dead download is acted on one grace period after Killarr comes back up.
 
 ---
 

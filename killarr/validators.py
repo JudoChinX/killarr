@@ -105,6 +105,11 @@ SETTINGS_SCHEMA = {
         'type': int,
         'min_value': 0,
     },
+    'dead_download_minutes': {
+        'default': 360,
+        'type': int,
+        'min_value': 0,
+    },
     'dry_run': {
         'default': False,
         'type': bool,

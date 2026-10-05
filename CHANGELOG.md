@@ -10,9 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `fetch_timeout` setting (default `30` seconds, minimum `1`) controlling how long to wait for each page of the queue response. It can be set globally or per instance. Raise it for instances with very large queues where the previous hardcoded 30-second limit was exceeded. Tag lookups, connection checks, queue deletes, and search commands continue to use a fixed 15-second timeout.
+- `dead_download` stall category for downloads that are dead in the download client but never reach a stalled status in the *arr app, such as an NZBGet post-process that failed with `Mark Status: BAD`. A queue record is a candidate when its `trackedDownloadStatus` is `ok`, its `trackedDownloadState` is `downloading`, and either `sizeleft` is `0` or the download client `status` is `warning`. The record's `errorMessage` is included in the stall details.
+- `dead_download_minutes` setting (default `360` minutes, minimum `0`) controlling how long a record must stay a dead-download candidate before it is classified as `dead_download`. Set it to `0` to disable dead-download detection. It can be set globally or per instance. Candidates still inside the grace period appear as `Dead pending: N` in the cycle summary.
 
 ### Changed
 
+- An existing `default` action now also applies to dead downloads once they pass the `dead_download_minutes` grace period. To keep dead downloads in the queue while `default` handles other categories, set `dead_download: {}`.
 - The run `interval` is now measured from the start of one cycle to the start of the next. Previously the full interval was slept after each cycle finished, so long cycles (large batches with a stagger) pushed every subsequent cycle later. The cycle-complete log line now reports the actual seconds until the next cycle.
 - The startup registration line now shows the resolved client type and weight, for example `Registered WhisparrV3 instance: Whisparr (Weight: 1)`. Failed queue removals and search commands now include the first 300 characters of the *arr response body in the log, flattened to a single line with any echoed API key redacted, which makes API-side rejections diagnosable.
 
@@ -110,7 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Queue fetch with client-side stall filtering (`trackedDownloadStatus == "warning"`)
-- Stall reason classification: inspects `statusMessages` to categorise stalls (e.g., `no_upgrade`, `manual_import`, `missing_items`)
+- Stall reason classification: inspects `statusMessages` to categorize stalls (e.g., `no_upgrade`, `manual_import`, `missing_items`)
 - Named action dispatch: assign `ignore`, `remove`, `retry`, or `blocklist` actions per stall category (resolves globally or per instance)
 - Batch size controls: `0` (disabled), `-1` (unlimited), `N > 0` (limit removals per cycle)
 - `stagger_interval_seconds`: wait between individual removal operations

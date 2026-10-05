@@ -9,6 +9,7 @@ from typing import override
 
 import requests
 
+from killarr.classifier import StallCategory
 from killarr.classifier import classify
 from killarr.validators import VALID_ACTIONS
 
@@ -75,11 +76,13 @@ class ArrClient(ABC):
         self.weight = weight
         self.batch_size: int = settings.get('batch_size', 10)
         self.retry_interval_minutes: int = settings.get('retry_interval_minutes', 0)
+        self.dead_download_minutes: int = settings.get('dead_download_minutes', 360)
         self.stagger_seconds: int = settings.get('stagger_interval_seconds', 5)
         self.dry_run: bool = settings.get('dry_run', False)
         self.fetch_page_size: int = settings.get('fetch_page_size', 500)
         self.fetch_timeout: int = settings.get('fetch_timeout', 30)
         self._retry_state: dict[int, datetime.datetime] = {}
+        self._dead_candidates: dict[int, datetime.datetime] = {}
         if not self.url.lower().startswith('https://'):
             _LOGGER.warning(
                 f"Client '{name}' is using a non-HTTPS URL ({self.url}). API keys will be transmitted in plaintext."
@@ -122,6 +125,12 @@ class ArrClient(ABC):
     def _get_media_id(self, record: dict) -> int:
         """Extract the media item ID from a queue record for a follow-up search."""
 
+    def _get_record_messages(self, record: dict) -> list[str]:
+        """Return the record's statusMessages text, deduplicated in order."""
+        return list(
+            dict.fromkeys(msg for msg_obj in record.get('statusMessages', []) for msg in msg_obj.get('messages', []))
+        )
+
     @abstractmethod
     def _get_record_tags(self, record: dict) -> list[int]:
         """Return the tag ID list from a queue record."""
@@ -134,6 +143,19 @@ class ArrClient(ABC):
     @abstractmethod
     def _id_field(self) -> str:
         """The payload ID field name for a search command (e.g. 'movieIds')."""
+
+    def _is_dead_candidate(self, record: dict) -> bool:
+        """Return True if the record looks dead while the arr app still reports it as healthy."""
+        return (
+            not self._is_stalled(record)
+            and record.get('trackedDownloadState') == 'downloading'
+            and (record.get('sizeleft') == 0 or record.get('status') == 'warning')
+        )
+
+    def _is_dead_past_threshold(self, queue_id: int) -> bool:
+        """Return True if this dead-download candidate has waited at least dead_download_minutes."""
+        elapsed = datetime.datetime.now(datetime.UTC) - self._dead_candidates[queue_id]
+        return elapsed >= datetime.timedelta(minutes=self.dead_download_minutes)
 
     def _is_stalled(self, record: dict) -> bool:
         """Return True if the record is considered stalled by the arr app."""
@@ -240,6 +262,27 @@ class ArrClient(ABC):
                 result.add(tag_id)
         return result
 
+    def _track_dead_candidates(self, records: list[dict]) -> None:
+        """Record first-seen times for dead-download candidates and prune entries that no longer qualify."""
+        if self.dead_download_minutes == 0:
+            return
+        now = datetime.datetime.now(datetime.UTC)
+        candidate_ids: set[int] = set()
+        for record in records:
+            if not self._is_dead_candidate(record):
+                continue
+            queue_id = record['id']
+            candidate_ids.add(queue_id)
+            if queue_id not in self._dead_candidates:
+                self._dead_candidates[queue_id] = now
+                trigger = 'sizeleft=0' if record.get('sizeleft') == 0 else 'status=warning'
+                _LOGGER.debug(
+                    f'[{self.name}] Dead-download candidate ({trigger}): {self._get_record_title(record)}'
+                    f' — {record.get("errorMessage", "")}'
+                )
+        for queue_id in self._dead_candidates.keys() - candidate_ids:
+            del self._dead_candidates[queue_id]
+
     def _trigger_search(self, media_id: int, title: str) -> None:
         """POST a fresh search command for the given media item."""
         url = f'{self.url}{self.ENDPOINT_COMMAND}'
@@ -290,9 +333,11 @@ class ArrClient(ABC):
                 'tag_filtered': 0,
                 'not_stalled': 0,
                 'retry_interval': 0,
+                'dead_pending': 0,
             }
 
         all_records = self._fetch_all_queue()
+        self._track_dead_candidates(all_records)
         items: list[QueueItem] = []
         skip_stats: dict[str, int] = {
             'total_evaluated': len(all_records),
@@ -300,27 +345,33 @@ class ArrClient(ABC):
             'tag_filtered': 0,
             'not_stalled': 0,
             'retry_interval': 0,
+            'dead_pending': 0,
         }
 
         for record in all_records:
             title = self._get_record_title(record)
-            if not self._is_stalled(record):
+            if self._is_stalled(record):
+                messages = self._get_record_messages(record)
+                category = classify(messages)
+                if category == 'unknown':
+                    _LOGGER.warning(
+                        f'[{self.name}] Unrecognized status messages for "{title}" '
+                        f'— please open a bug report at https://github.com/JudoChinX/killarr/issues '
+                        f'with the following: {messages}'
+                    )
+            elif record['id'] in self._dead_candidates:
+                if not self._is_dead_past_threshold(record['id']):
+                    skip_stats['dead_pending'] += 1
+                    continue
+                error_message = record.get('errorMessage')
+                messages = list(
+                    dict.fromkeys([*self._get_record_messages(record), *([error_message] if error_message else [])])
+                )
+                category = str(StallCategory.DEAD_DOWNLOAD)
+            else:
                 skip_stats['not_stalled'] += 1
                 continue
 
-            messages: list[str] = list(
-                dict.fromkeys(
-                    msg for msg_obj in record.get('statusMessages', []) for msg in msg_obj.get('messages', [])
-                )
-            )
-
-            category = classify(messages)
-            if category == 'unknown':
-                _LOGGER.warning(
-                    f'[{self.name}] Unrecognized status messages for "{title}" '
-                    f'— please open a bug report at https://github.com/JudoChinX/killarr/issues '
-                    f'with the following: {messages}'
-                )
             action = self._resolve_action(category)
 
             if not action['remove']:

@@ -116,6 +116,12 @@ def _calculate_eta(item_count: int, stagger_seconds: int) -> str:
     return result
 
 
+def _dead_pending_suffix(skip_stats: dict[str, int]) -> str:
+    """Return ', Dead pending: N' when dead-download candidates are waiting, else ''."""
+    dead_pending = skip_stats.get('dead_pending', 0)
+    return f', Dead pending: {dead_pending}' if dead_pending else ''
+
+
 def _fmt_action(value: dict[str, bool] | None) -> str:
     """Format a stall action setting value as a human-readable flag string."""
     if value:
@@ -128,7 +134,7 @@ def _format_cycle_info(client_name: str, item_count: int, skip_stats: dict[str, 
     """Format cycle processing info message with counts."""
     total_eval = skip_stats['total_evaluated']
     skipped = skip_stats['ignored'] + skip_stats['tag_filtered'] + skip_stats.get('retry_interval', 0)
-    return f'[{client_name}] Found {item_count} items to remove (Evaluated: {total_eval}, Skipped: {skipped}).'
+    return f'[{client_name}] Found {item_count} items to remove (Evaluated: {total_eval}, Skipped: {skipped}{_dead_pending_suffix(skip_stats)}).'
 
 
 def _get_setting(settings: dict, key: str) -> Any:
@@ -262,7 +268,7 @@ def _run_removal_cycle(active_clients: list[Any], settings: dict) -> None:
         items, skip_stats = client.get_stalled_items()
         if not items:
             _LOGGER.info(
-                f'[{client.name}] No stalled items found this cycle (Evaluated: {skip_stats["total_evaluated"]}).'
+                f'[{client.name}] No stalled items found this cycle (Evaluated: {skip_stats["total_evaluated"]}{_dead_pending_suffix(skip_stats)}).'
             )
         else:
             _LOGGER.info(_format_cycle_info(client.name, len(items), skip_stats))
