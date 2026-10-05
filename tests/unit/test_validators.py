@@ -125,6 +125,10 @@ _validate_global_settings_bool_for_int_cases = {
         'settings': {'retry_interval_minutes': False},
         'expected_error': "'killarr.retry_interval_minutes' must be of type int.",
     },
+    'dead_download_minutes_true_rejected': {
+        'settings': {'dead_download_minutes': True},
+        'expected_error': "'killarr.dead_download_minutes' must be of type int.",
+    },
     'fetch_page_size_true_rejected': {
         'settings': {'fetch_page_size': True},
         'expected_error': "'killarr.fetch_page_size' must be of type int.",
@@ -323,6 +327,14 @@ _validate_stall_action_settings_cases = {
     },
     'blocklist_with_remove_false_raises': {
         'settings': {'generic': {'remove': False, 'blocklist': True}},
+        'expect_error': True,
+    },
+    'dead_download_valid_flags_passes': {
+        'settings': {'dead_download': {'remove': True, 'blocklist': True, 'search': True}},
+        'expect_error': False,
+    },
+    'dead_download_blocklist_without_remove_raises': {
+        'settings': {'dead_download': {'blocklist': True}},
         'expect_error': True,
     },
     'unrelated_key_ignored': {

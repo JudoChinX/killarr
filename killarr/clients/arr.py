@@ -75,11 +75,13 @@ class ArrClient(ABC):
         self.weight = weight
         self.batch_size: int = settings.get('batch_size', 10)
         self.retry_interval_minutes: int = settings.get('retry_interval_minutes', 0)
+        self.dead_download_minutes: int = settings.get('dead_download_minutes', 360)
         self.stagger_seconds: int = settings.get('stagger_interval_seconds', 5)
         self.dry_run: bool = settings.get('dry_run', False)
         self.fetch_page_size: int = settings.get('fetch_page_size', 500)
         self.fetch_timeout: int = settings.get('fetch_timeout', 30)
         self._retry_state: dict[int, datetime.datetime] = {}
+        self._dead_candidates: dict[int, datetime.datetime] = {}
         if not self.url.lower().startswith('https://'):
             _LOGGER.warning(
                 f"Client '{name}' is using a non-HTTPS URL ({self.url}). API keys will be transmitted in plaintext."

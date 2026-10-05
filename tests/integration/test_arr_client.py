@@ -140,6 +140,13 @@ def test_client_reads_fetch_timeout_from_settings() -> None:
     assert client.fetch_timeout == 45
 
 
+def test_client_reads_dead_download_minutes_from_settings() -> None:
+    """Test that the client reads dead_download_minutes from the settings dict and starts with no candidates."""
+    client = ClientBuilder().radarr().with_settings(dead_download_minutes=90).build()
+    assert client.dead_download_minutes == 90
+    assert client._dead_candidates == {}
+
+
 def test_fetch_all_queue_uses_fetch_timeout() -> None:
     """Test that the queue fetch uses the configured fetch_timeout."""
     client = ClientBuilder().radarr().with_settings(fetch_timeout=45).build()

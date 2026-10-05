@@ -14,6 +14,7 @@ class StallCategory(StrEnum):
     MISSING_ITEMS = 'missing_items'
     TBA_TITLE = 'tba_title'
     NO_MESSAGES = 'no_messages'
+    DEAD_DOWNLOAD = 'dead_download'
     UNKNOWN = 'unknown'
 
 

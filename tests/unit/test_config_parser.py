@@ -79,6 +79,7 @@ _get_setting_default_cases = {
     'interval': {'setting': 'interval', 'expected': 3600},
     'batch_size': {'setting': 'batch_size', 'expected': 10},
     'retry_interval_minutes': {'setting': 'retry_interval_minutes', 'expected': 0},
+    'dead_download_minutes': {'setting': 'dead_download_minutes', 'expected': 360},
     'dry_run': {'setting': 'dry_run', 'expected': False},
     'stagger_interval_seconds': {'setting': 'stagger_interval_seconds', 'expected': 5},
 }
@@ -164,6 +165,22 @@ _parse_config_cases = {
     'retry_interval_minutes_rejects_non_int': {
         'config_data': make_config(killarr_section={'retry_interval_minutes': '1h'}),
         'expected_error': "'killarr.retry_interval_minutes' must be of type int.",
+    },
+    'dead_download_minutes_defaults_to_360': {
+        'config_data': make_config(),
+        'expected_result': {'global_settings': {'dead_download_minutes': 360}},
+    },
+    'dead_download_minutes_accepts_zero': {
+        'config_data': make_config(killarr_section={'dead_download_minutes': 0}),
+        'expected_result': {'global_settings': {'dead_download_minutes': 0}},
+    },
+    'dead_download_minutes_rejects_negative': {
+        'config_data': make_config(killarr_section={'dead_download_minutes': -1}),
+        'expected_error': "'killarr.dead_download_minutes' must be at least 0.",
+    },
+    'dead_download_minutes_rejects_non_int': {
+        'config_data': make_config(killarr_section={'dead_download_minutes': '6h'}),
+        'expected_error': "'killarr.dead_download_minutes' must be of type int.",
     },
     'fetch_page_size_defaults_to_500': {
         'config_data': make_config(),
@@ -479,6 +496,34 @@ _parse_config_cases = {
         ),
         'expected_error': "'instances.r.killarr.fetch_timeout' must be at least 1.",
     },
+    'instance_dead_download_minutes_override_promoted': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'dead_download_minutes': 60},
+                }
+            }
+        ),
+        'expected_result': {'instances': {'radarr': [{'dead_download_minutes': 60}]}},
+    },
+    'instance_dead_download_minutes_override_rejects_negative': {
+        'config_data': make_config(
+            instances={
+                'r': {
+                    'type': 'radarr',
+                    'host': 'http://r',
+                    'api_key': 'k',
+                    'enabled': True,
+                    'killarr': {'dead_download_minutes': -1},
+                }
+            }
+        ),
+        'expected_error': "'instances.r.killarr.dead_download_minutes' must be at least 0.",
+    },
 }
 
 
@@ -737,6 +782,18 @@ _load_config_from_env_cases = {
             'global_settings': {'fetch_timeout': 45},
         },
     },
+    'dead_download_minutes_from_env': {
+        'env_vars': {
+            'KILLARR_GLOBAL_DEAD_DOWNLOAD_MINUTES': '90',
+            'KILLARR_INSTANCE_0_NAME': 'R',
+            'KILLARR_INSTANCE_0_TYPE': 'radarr',
+            'KILLARR_INSTANCE_0_URL': 'http://r:7878',
+            'KILLARR_INSTANCE_0_API_KEY': 'k',
+        },
+        'expected_result': {
+            'global_settings': {'dead_download_minutes': 90},
+        },
+    },
     'defaults_when_no_globals': {
         'env_vars': {
             'KILLARR_INSTANCE_0_NAME': 'R',
@@ -823,6 +880,18 @@ _load_config_from_env_cases = {
         },
         'expected_result': {
             'global_settings': {'generic': {'remove': True, 'blocklist': True, 'search': False}},
+        },
+    },
+    'dead_download_action_from_env': {
+        'env_vars': {
+            'KILLARR_GLOBAL_DEAD_DOWNLOAD': '{"remove": true}',
+            'KILLARR_INSTANCE_0_NAME': 'R',
+            'KILLARR_INSTANCE_0_TYPE': 'radarr',
+            'KILLARR_INSTANCE_0_URL': 'http://r',
+            'KILLARR_INSTANCE_0_API_KEY': 'k',
+        },
+        'expected_result': {
+            'global_settings': {'dead_download': {'remove': True}},
         },
     },
     'stall_category_invalid_json_raises': {
@@ -996,12 +1065,14 @@ def test_parse_config_with_actions() -> None:
             'no_upgrade': {},
             'generic': {'remove': True, 'blocklist': True},
             'dangerous_file': {'remove': True},
+            'dead_download': {'remove': True, 'search': True},
         },
     }
     result = parse_config(config)
     assert result['global_settings']['no_upgrade'] == {}
     assert result['global_settings']['generic'] == {'remove': True, 'blocklist': True}
     assert result['global_settings']['dangerous_file'] == {'remove': True}
+    assert result['global_settings']['dead_download'] == {'remove': True, 'search': True}
 
 
 def test_parse_config_invalid_action() -> None:
