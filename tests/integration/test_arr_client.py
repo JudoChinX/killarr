@@ -247,6 +247,86 @@ def test_is_stalled(record: Any, expected: Any) -> None:
     assert client._is_stalled(record) is expected
 
 
+def _make_dead_record() -> dict:
+    """Build the dead-download queue record from issue #47."""
+    return (
+        RadarrQueueBuilder()
+        .ok()
+        .with_tracked_state('downloading')
+        .with_sizeleft(0)
+        .with_status('warning')
+        .with_error_message('PAR Status: NONE - Unpack Status: NONE - Mark Status: BAD')
+        .build()
+    )
+
+
+_is_dead_candidate_cases = {
+    'issue_record_is_candidate': {
+        'record': _make_dead_record(),
+        'expected': True,
+    },
+    'sizeleft_zero_status_downloading_is_candidate': {
+        'record': RadarrQueueBuilder()
+        .ok()
+        .with_tracked_state('downloading')
+        .with_sizeleft(0)
+        .with_status('downloading')
+        .build(),
+        'expected': True,
+    },
+    'sizeleft_positive_status_warning_is_candidate': {
+        'record': RadarrQueueBuilder()
+        .ok()
+        .with_tracked_state('downloading')
+        .with_sizeleft(1024)
+        .with_status('warning')
+        .build(),
+        'expected': True,
+    },
+    'sizeleft_positive_status_downloading_is_not_candidate': {
+        'record': RadarrQueueBuilder()
+        .ok()
+        .with_tracked_state('downloading')
+        .with_sizeleft(1024)
+        .with_status('downloading')
+        .build(),
+        'expected': False,
+    },
+    'missing_sizeleft_status_downloading_is_not_candidate': {
+        'record': RadarrQueueBuilder().ok().with_tracked_state('downloading').with_status('downloading').build(),
+        'expected': False,
+    },
+    'import_pending_state_is_not_candidate': {
+        'record': RadarrQueueBuilder().ok().with_tracked_state('importPending').with_sizeleft(0).build(),
+        'expected': False,
+    },
+    'already_stalled_record_is_not_candidate': {
+        'record': RadarrQueueBuilder()
+        .warning()
+        .with_tracked_state('downloading')
+        .with_sizeleft(0)
+        .with_status('warning')
+        .build(),
+        'expected': False,
+    },
+    'empty_record_is_not_candidate': {
+        'record': {},
+        'expected': False,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'record, expected',
+    [(case['record'], case['expected']) for case in _is_dead_candidate_cases.values()],
+    ids=list(_is_dead_candidate_cases.keys()),
+)
+def test_is_dead_candidate(record: Any, expected: Any) -> None:
+    """Test that _is_dead_candidate flags dead downloads the arr app still reports as healthy."""
+    client = ClientBuilder().radarr().build()
+    assert client._is_dead_candidate(record) is expected
+
+
 _resolve_action_cases = {
     'specific_category_setting_returned': {
         'settings': {'no_upgrade': {'remove': True}, 'default': {'remove': True, 'blocklist': True}},

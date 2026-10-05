@@ -44,9 +44,24 @@ class _QueueRecordBuilder:
         self._data['added'] = added
         return self
 
+    def with_error_message(self, message: str) -> Self:
+        """Set the download client errorMessage field."""
+        self._data['errorMessage'] = message
+        return self
+
     def with_id(self, queue_id: int) -> Self:
         """Set the queue record ID."""
         self._data['id'] = queue_id
+        return self
+
+    def with_sizeleft(self, sizeleft: int) -> Self:
+        """Set the remaining download size in bytes."""
+        self._data['sizeleft'] = sizeleft
+        return self
+
+    def with_status(self, status: str) -> Self:
+        """Set the top-level download client status field."""
+        self._data['status'] = status
         return self
 
     def with_status_messages(self, messages: list[str]) -> Self:
@@ -57,6 +72,11 @@ class _QueueRecordBuilder:
     def with_title(self, title: str) -> Self:
         """Set the download title."""
         self._data['title'] = title
+        return self
+
+    def with_tracked_state(self, state: str) -> Self:
+        """Set the trackedDownloadState field."""
+        self._data['trackedDownloadState'] = state
         return self
 
 

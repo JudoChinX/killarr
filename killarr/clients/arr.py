@@ -137,6 +137,14 @@ class ArrClient(ABC):
     def _id_field(self) -> str:
         """The payload ID field name for a search command (e.g. 'movieIds')."""
 
+    def _is_dead_candidate(self, record: dict) -> bool:
+        """Return True if the record looks dead while the arr app still reports it as healthy."""
+        return (
+            not self._is_stalled(record)
+            and record.get('trackedDownloadState') == 'downloading'
+            and (record.get('sizeleft') == 0 or record.get('status') == 'warning')
+        )
+
     def _is_stalled(self, record: dict) -> bool:
         """Return True if the record is considered stalled by the arr app."""
         return record.get('trackedDownloadStatus') == 'warning'
