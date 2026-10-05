@@ -327,6 +327,231 @@ def test_is_dead_candidate(record: Any, expected: Any) -> None:
     assert client._is_dead_candidate(record) is expected
 
 
+def test_get_stalled_items_dead_candidate_first_cycle_is_pending() -> None:
+    """Test that a new dead-download candidate is counted as pending and starts its clock."""
+    client = ClientBuilder().radarr().with_settings(dead_download={'remove': True}).build()
+    client.session.get = MagicMock(return_value=mock_queue_response([_make_dead_record()]))
+    items, skip_stats = client.get_stalled_items()
+    assert not items
+    assert skip_stats['dead_pending'] == 1
+    assert skip_stats['not_stalled'] == 0
+    assert client._dead_candidates == {1: FIXED_NOW}
+
+
+def test_get_stalled_items_dead_candidate_logs_debug_on_first_sight(caplog: Any) -> None:
+    """Test that a new dead-download candidate logs its title, trigger, and errorMessage at DEBUG."""
+    client = ClientBuilder().radarr().build()
+    record = _make_dead_record()
+    client.session.get = MagicMock(return_value=mock_queue_response([record]))
+    with caplog.at_level(logging.DEBUG):
+        client.get_stalled_items()
+    assert 'Dead-download candidate (sizeleft=0)' in caplog.text
+    assert record['title'] in caplog.text
+    assert 'Mark Status: BAD' in caplog.text
+
+
+def test_get_stalled_items_dead_candidate_past_threshold_returned() -> None:
+    """Test that a candidate past dead_download_minutes is returned as dead_download with its errorMessage."""
+    client = ClientBuilder().radarr().with_settings(dead_download={'remove': True}).build()
+    client._dead_candidates = {1: FIXED_NOW - datetime.timedelta(minutes=361)}
+    client.session.get = MagicMock(return_value=mock_queue_response([_make_dead_record()]))
+    items, skip_stats = client.get_stalled_items()
+    assert len(items) == 1
+    assert items[0].category == 'dead_download'
+    assert items[0].messages == ['PAR Status: NONE - Unpack Status: NONE - Mark Status: BAD']
+    assert skip_stats['dead_pending'] == 0
+
+
+def test_get_stalled_items_dead_candidate_at_threshold_returned() -> None:
+    """Test that a candidate seen exactly dead_download_minutes ago is returned (inclusive threshold)."""
+    client = ClientBuilder().radarr().with_settings(dead_download={'remove': True}).build()
+    client._dead_candidates = {1: FIXED_NOW - datetime.timedelta(minutes=360)}
+    client.session.get = MagicMock(return_value=mock_queue_response([_make_dead_record()]))
+    items, _stats = client.get_stalled_items()
+    assert len(items) == 1
+    assert items[0].category == 'dead_download'
+
+
+def test_get_stalled_items_dead_candidate_recovers_drops_tracker() -> None:
+    """Test that a recovered candidate is dropped from the tracker and a relapse starts a new clock."""
+    client = ClientBuilder().radarr().with_settings(dead_download={'remove': True}).build()
+    client._dead_candidates = {1: FIXED_NOW - datetime.timedelta(minutes=300)}
+    recovered = (
+        RadarrQueueBuilder()
+        .ok()
+        .with_tracked_state('downloading')
+        .with_sizeleft(1024)
+        .with_status('downloading')
+        .build()
+    )
+    client.session.get = MagicMock(return_value=mock_queue_response([recovered]))
+    _items, skip_stats = client.get_stalled_items()
+    assert not client._dead_candidates
+    assert skip_stats['not_stalled'] == 1
+    client.session.get = MagicMock(return_value=mock_queue_response([_make_dead_record()]))
+    items, skip_stats = client.get_stalled_items()
+    assert not items
+    assert skip_stats['dead_pending'] == 1
+    assert client._dead_candidates == {1: FIXED_NOW}
+
+
+def test_get_stalled_items_dead_candidate_becomes_stalled_drops_tracker() -> None:
+    """Test that a candidate the arr app flags as warning leaves the tracker and keeps its message category."""
+    client = ClientBuilder().radarr().with_settings(generic={'remove': True}).build()
+    client._dead_candidates = {1: FIXED_NOW - datetime.timedelta(minutes=361)}
+    record = (
+        RadarrQueueBuilder()
+        .warning()
+        .with_tracked_state('downloading')
+        .with_sizeleft(0)
+        .with_status('warning')
+        .with_status_messages(['The download is stalled with no connections'])
+        .build()
+    )
+    client.session.get = MagicMock(return_value=mock_queue_response([record]))
+    items, _stats = client.get_stalled_items()
+    assert len(items) == 1
+    assert items[0].category == 'generic'
+    assert not client._dead_candidates
+
+
+def test_get_stalled_items_dead_candidate_leaves_queue_pruned() -> None:
+    """Test that a candidate no longer in the queue is pruned from the tracker."""
+    client = ClientBuilder().radarr().build()
+    client._dead_candidates = {1: FIXED_NOW - datetime.timedelta(minutes=60)}
+    client.session.get = MagicMock(return_value=mock_queue_response([RadarrQueueBuilder().ok().with_id(2).build()]))
+    client.get_stalled_items()
+    assert not client._dead_candidates
+
+
+def test_get_stalled_items_dead_candidate_past_batch_size_still_tracked() -> None:
+    """Test that the pre-pass starts the clock for candidates beyond the batch_size cutoff."""
+    client = ClientBuilder().radarr().with_settings(batch_size=1, no_messages={'remove': True}).build()
+    records = [
+        RadarrQueueBuilder().warning().with_id(1).build(),
+        RadarrQueueBuilder()
+        .ok()
+        .with_id(2)
+        .with_tracked_state('downloading')
+        .with_sizeleft(0)
+        .with_status('warning')
+        .build(),
+    ]
+    client.session.get = MagicMock(return_value=mock_queue_response(records))
+    items, _stats = client.get_stalled_items()
+    assert [item.queue_id for item in items] == [1]
+    assert client._dead_candidates == {2: FIXED_NOW}
+
+
+def test_get_stalled_items_dead_download_minutes_zero_disables_detection() -> None:
+    """Test that dead_download_minutes=0 never tracks or classifies dead downloads."""
+    client = ClientBuilder().radarr().with_settings(dead_download_minutes=0, default={'remove': True}).build()
+    client.session.get = MagicMock(return_value=mock_queue_response([_make_dead_record()]))
+    items, skip_stats = client.get_stalled_items()
+    assert not items
+    assert not client._dead_candidates
+    assert skip_stats['not_stalled'] == 1
+    assert skip_stats['dead_pending'] == 0
+
+
+def test_get_stalled_items_dead_download_empty_action_ignored() -> None:
+    """Test that dead_download: {} opts out even when default removes."""
+    client = ClientBuilder().radarr().with_settings(dead_download={}, default={'remove': True}).build()
+    client._dead_candidates = {1: FIXED_NOW - datetime.timedelta(minutes=361)}
+    client.session.get = MagicMock(return_value=mock_queue_response([_make_dead_record()]))
+    items, skip_stats = client.get_stalled_items()
+    assert not items
+    assert skip_stats['ignored'] == 1
+
+
+def test_get_stalled_items_dead_download_falls_back_to_default() -> None:
+    """Test that a dead download without its own setting uses the default action."""
+    client = ClientBuilder().radarr().with_settings(default={'remove': True, 'search': True}).build()
+    client._dead_candidates = {1: FIXED_NOW - datetime.timedelta(minutes=361)}
+    client.session.get = MagicMock(return_value=mock_queue_response([_make_dead_record()]))
+    items, _stats = client.get_stalled_items()
+    assert len(items) == 1
+    assert items[0].category == 'dead_download'
+    assert items[0].remove is True
+    assert items[0].search is True
+
+
+def test_get_stalled_items_dead_download_tag_filtered_keeps_tracker() -> None:
+    """Test that a tag-excluded dead download is counted as tag_filtered and stays tracked."""
+    tags_response = mock_http_response([{'id': 5, 'label': 'protected'}])
+    with patch('requests.Session.get', return_value=tags_response):
+        client = (
+            ClientBuilder().radarr().with_settings(exclude_tags=['protected'], dead_download={'remove': True}).build()
+        )
+    seen = FIXED_NOW - datetime.timedelta(minutes=361)
+    client._dead_candidates = {1: seen}
+    record = (
+        RadarrQueueBuilder()
+        .ok()
+        .with_tags([5])
+        .with_tracked_state('downloading')
+        .with_sizeleft(0)
+        .with_status('warning')
+        .build()
+    )
+    client.session.get = MagicMock(return_value=mock_queue_response([record]))
+    items, skip_stats = client.get_stalled_items()
+    assert not items
+    assert skip_stats['tag_filtered'] == 1
+    assert client._dead_candidates == {1: seen}
+
+
+def test_get_stalled_items_dead_download_retry_interval_keeps_tracker() -> None:
+    """Test that a dead download within the retry interval is skipped and stays tracked."""
+    client = ClientBuilder().radarr().with_settings(retry_interval_minutes=120, dead_download={'remove': True}).build()
+    client._retry_state = {10: FIXED_NOW}
+    seen = FIXED_NOW - datetime.timedelta(minutes=361)
+    client._dead_candidates = {1: seen}
+    client.session.get = MagicMock(return_value=mock_queue_response([_make_dead_record()]))
+    items, skip_stats = client.get_stalled_items()
+    assert not items
+    assert skip_stats['retry_interval'] == 1
+    assert client._dead_candidates == {1: seen}
+
+
+def test_get_stalled_items_batch_size_zero_includes_dead_pending() -> None:
+    """Test that the batch_size=0 early return carries dead_pending and leaves the tracker untouched."""
+    client = ClientBuilder().radarr().with_settings(batch_size=0).build()
+    seen = FIXED_NOW - datetime.timedelta(minutes=60)
+    client._dead_candidates = {1: seen}
+    client.session.get = MagicMock(return_value=mock_queue_response([_make_dead_record()]))
+    items, skip_stats = client.get_stalled_items()
+    assert not items
+    assert skip_stats['dead_pending'] == 0
+    assert client._dead_candidates == {1: seen}
+    assert not client.session.get.called
+
+
+def test_get_stalled_items_dead_download_dry_run_does_not_delete(caplog: Any) -> None:
+    """Test that a dead download in dry run logs a DRY RUN line and sends no DELETE."""
+    client = ClientBuilder().radarr().with_settings(dry_run=True, dead_download={'remove': True}).build()
+    client._dead_candidates = {1: FIXED_NOW - datetime.timedelta(minutes=361)}
+    client.session.get = MagicMock(return_value=mock_queue_response([_make_dead_record()]))
+    client.session.delete = MagicMock()
+    items, _stats = client.get_stalled_items()
+    with caplog.at_level(logging.INFO):
+        client.execute_removal(items[0], 1, 1)
+    assert '[DRY RUN] Would remove (dead_download)' in caplog.text
+    assert not client.session.delete.called
+
+
+def test_get_stalled_items_dead_candidates_are_per_instance() -> None:
+    """Test that each client instance keeps its own dead-download tracker."""
+    first = ClientBuilder().radarr().with_name('first').build()
+    second = ClientBuilder().radarr().with_name('second').build()
+    first.session.get = MagicMock(return_value=mock_queue_response([_make_dead_record()]))
+    second.session.get = MagicMock(return_value=mock_queue_response([]))
+    first.get_stalled_items()
+    second.get_stalled_items()
+    assert first._dead_candidates == {1: FIXED_NOW}
+    assert not second._dead_candidates
+
+
 _resolve_action_cases = {
     'specific_category_setting_returned': {
         'settings': {'no_upgrade': {'remove': True}, 'default': {'remove': True, 'blocklist': True}},
