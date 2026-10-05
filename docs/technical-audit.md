@@ -66,7 +66,7 @@ config.yaml → config_parser.py → main.py → ArrClient instances → classif
 
 Each cycle:
 1. Fetch the full queue from each \*arr instance (paginated)
-2. Filter client-side for `trackedDownloadStatus == "warning"`
+2. Filter client-side for `trackedDownloadStatus == "warning"`, plus dead-download candidates (`trackedDownloadStatus == "ok"`, `trackedDownloadState == "downloading"`, and `sizeleft == 0` or `status == "warning"`) that have stayed candidates for `dead_download_minutes`
 3. Pass status messages to `classifier.py` to categorise the stall reason
 4. Resolve action flags (`remove`, `blocklist`, `search`) for each stall category based on configuration
 5. Apply tag filtering (include/exclude) and batch size limits
@@ -145,6 +145,7 @@ Each cycle:
 - `get_stalled_items()`: Fetches the full queue, filters for stalled items, classifies them via `classifier.py`, and applies tag filtering and batch limits. Returns a tuple of `(actionable_items, skip_stats)` where each `QueueItem` carries `queue_id`, `media_id`, `title`, `remove`, `blocklist`, `search`, `category`, `messages`, and `added` (ISO 8601 timestamp from the \*arr API).
 - `_fetch_all_queue()`: Paginates through the \*arr queue endpoint until all records are retrieved, bounded per page by the configurable `fetch_timeout`.
 - `_is_stalled()`: Returns `True` if `trackedDownloadStatus == "warning"`.
+- `_is_dead_candidate()`: Returns `True` if the record is not stalled, `trackedDownloadState == "downloading"`, and either `sizeleft == 0` or `status == "warning"`. Candidates are tracked per client by queue ID and classified as `dead_download` once they have stayed candidates for `dead_download_minutes`.
 - `execute_removal()`: Removes a single queue item by delegating to `_remove_single()`.
 - `_trigger_search()`: POSTs a search command to the \*arr command endpoint.
 - `_resolve_tag_ids()`: At startup, fetches all tags from the instance and resolves configured tag names to IDs.
@@ -291,15 +292,15 @@ Killarr operates entirely within your local network:
 
 ### Client-Side Stall Filtering
 
-**Choice:** Fetch the full queue and filter locally for `trackedDownloadStatus == "warning"`.
+**Choice:** Fetch the full queue and filter locally for `trackedDownloadStatus == "warning"`. Dead downloads that never reach that status are detected locally too, from `trackedDownloadState`, `sizeleft`, and the download client `status`, after the `dead_download_minutes` grace period.
 
 **Why:** The \*arr queue API does not expose this field as a server-side filter. Client-side filtering keeps the logic visible, testable, and consistent across all three \*arr applications. See [Client-Side Filtering Rationale](#client-side-filtering-rationale).
 
 ### Stateless Operation
 
-**Choice:** No database, no persistent state between cycles.
+**Choice:** No database and no persistent state across restarts. The only state kept between cycles is in memory on each client: the `retry_interval_minutes` cooldowns and the first-seen times of dead-download candidates. Both are lost on restart, which at most delays an action by one cooldown or one grace period.
 
-**Why:** Nothing to corrupt, easy to restart, transparent behaviour. The \*arr queue itself is the source of truth — Killarr reads from it fresh each cycle.
+**Why:** Nothing to corrupt, easy to restart, transparent behavior. The \*arr queue itself is the source of truth — Killarr reads from it fresh each cycle.
 
 ### AI-Assisted Development
 

@@ -51,8 +51,8 @@
 
 ## Key Features
 
-- **Stall Detection:** Identifies downloads stuck in a warning state via `trackedDownloadStatus`.
-- **Stall Classification:** Inspects `statusMessages` to categorise each stall into one of nine categories: `no_upgrade`, `manual_import`, `no_files`, `missing_items`, `tba_title`, `dangerous_file`, `generic`, `no_messages`, or `unknown`.
+- **Stall Detection:** Identifies downloads stuck in a warning state via `trackedDownloadStatus`, plus dead downloads the \*arr app still reports as healthy (nothing left to download or a download client warning) once they pass a configurable grace period.
+- **Stall Classification:** Inspects `statusMessages` to categorize each stall into one of ten categories: `no_upgrade`, `manual_import`, `no_files`, `missing_items`, `tba_title`, `dangerous_file`, `generic`, `no_messages`, `dead_download`, or `unknown`.
 - **Granular Stall Actions:** Assign `remove`, `blocklist`, and `search` flags per stall category — globally or per instance — for precise control over each stall type.
 - **Batch Size Controls:** Limit removals per cycle (`0` = disabled, `-1` = unlimited, `N` = global cap across all instances).
 - **Weighted Round-Robin Allocation:** Distribute the batch budget across instances by weight; interleave items from different instances or drain one at a time.
