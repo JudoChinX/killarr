@@ -47,7 +47,7 @@ To be absolutely clear, Killarr does not and will never:
 
 ## Architecture Overview
 
-Killarr is a ~1,422-line Python service with five core modules:
+Killarr is a ~1,544-line Python service with five core modules:
 
 ```
 killarr/
@@ -146,6 +146,8 @@ Each cycle:
 - `_fetch_all_queue()`: Paginates through the \*arr queue endpoint until all records are retrieved, bounded per page by the configurable `fetch_timeout`.
 - `_is_stalled()`: Returns `True` if `trackedDownloadStatus == "warning"`.
 - `_is_dead_candidate()`: Returns `True` if the record is not stalled, `trackedDownloadState == "downloading"`, and either `sizeleft == 0` or `status == "warning"`. Candidates are tracked per client by queue ID and classified as `dead_download` once they have stayed candidates for `dead_download_minutes`.
+- `_track_dead_candidates()`: Records the first-seen time of each dead-download candidate and prunes entries that no longer qualify; a no-op when `dead_download_minutes` is `0`.
+- `_error_detail()` (module function): Builds the ` — <body>` suffix for failed DELETE/POST logs: the response body with the API key replaced by `[REDACTED]`, flattened to one line, truncated to 300 characters.
 - `execute_removal()`: Removes a single queue item by delegating to `_remove_single()`.
 - `_trigger_search()`: POSTs a search command to the \*arr command endpoint.
 - `_resolve_tag_ids()`: At startup, fetches all tags from the instance and resolves configured tag names to IDs.
@@ -160,8 +162,8 @@ Each cycle:
 |---|---|---|---|---|
 | `/api/v3/queue` (Radarr/Sonarr/Whisparr), `/api/v1/queue` (Lidarr/Readarr) | GET | Fetch all queue records | Per cycle per instance | Read-only |
 | `/api/v3/queue/{id}` (Radarr/Sonarr/Whisparr), `/api/v1/queue/{id}` (Lidarr/Readarr) | DELETE | Remove stalled queue item | Per stalled item | **Write** |
-| `/api/v3/command` (Radarr/Sonarr/Whisparr), `/api/v1/command` (Lidarr/Readarr) | POST | Trigger fresh search | Per removal (if action is `retry` or `blocklist`) | **Write** |
-| `/api/v3/tag` (Radarr/Sonarr/Whisparr), `/api/v1/tag` (Lidarr/Readarr) | GET | Resolve tag names to IDs | Startup only (if tags configured) | Read-only |
+| `/api/v3/command` (Radarr/Sonarr/Whisparr), `/api/v1/command` (Lidarr/Readarr) | POST | Trigger fresh search | Per removal (if `search: true`) | **Write** |
+| `/api/v3/tag` (Radarr/Sonarr/Whisparr), `/api/v1/tag` (Lidarr/Readarr) | GET | Startup connection check; resolve tag names to IDs | Startup only (tag resolution only if tags configured) | Read-only |
 
 **Timeouts:** The queue GET is bounded by the configurable `fetch_timeout` (default 30 seconds). The DELETE, POST, and tag GET calls use the fixed 15-second `REQUEST_TIMEOUT` because they do not scale with queue size.
 
@@ -181,7 +183,7 @@ Each cycle:
 
 The \*arr queue API (`GET /api/v3/queue`) does not expose `trackedDownloadStatus` as a server-side filter parameter. Killarr fetches all queue pages and applies the `trackedDownloadStatus == "warning"` filter locally.
 
-This is an intentional architectural decision. The alternative — relying on a server-side filter that may not exist or behave consistently across \*arr versions — would make the filtering less transparent and harder to test. Client-side filtering means the logic is entirely visible in the source, fully unit-tested, and immune to API inconsistencies between Radarr, Sonarr, and Lidarr versions.
+This is an intentional architectural decision. The alternative — relying on a server-side filter that may not exist or behave consistently across \*arr versions — would make the filtering less transparent and harder to test. Client-side filtering means the logic is entirely visible in the source, fully unit-tested, and immune to API inconsistencies between Radarr, Readarr, Sonarr, Lidarr, and Whisparr versions.
 
 The trade-off is that Killarr fetches the full queue each cycle rather than a pre-filtered subset. For typical homelab queue sizes (tens to low hundreds of items), this is negligible.
 
@@ -198,7 +200,7 @@ API keys are set once during client initialization:
 self.session.headers.update({'X-Api-Key': api_key, 'Content-Type': 'application/json'})
 ```
 
-This is the ONLY place API keys are used. They are:
+The client also keeps the key in `self._api_key` for one purpose: `_error_detail()` replaces any echo of it in a failed DELETE or POST response body with `[REDACTED]` before the first 300 characters of that body are logged. API keys are:
 - Never logged
 - Never transmitted except in the `X-Api-Key` header to your configured instances
 - Never stored to disk
@@ -239,7 +241,7 @@ Killarr operates entirely within your local network:
 
 ### 1. Security Through Simplicity
 
-**Decision:** ~1,422 lines of core Python code, zero external dependencies beyond `requests` and `PyYAML`.
+**Decision:** ~1,544 lines of core Python code, zero external dependencies beyond `requests` and `PyYAML`.
 
 **Why:** Small codebases are auditable. Every line of code is a potential attack surface. By keeping the codebase minimal, security reviewers can read and understand the entire project in under an hour.
 
@@ -255,11 +257,11 @@ Killarr operates entirely within your local network:
 
 **Decision:** Only two write operations exist — DELETE queue items and POST search commands.
 
-**Why:** Write operations are where damage can happen. Killarr cannot modify your library, change settings, or access download clients. Both write operations match actions you would take manually in the \*arr UI, and both can be disabled by setting actions to `ignore` or using `dry_run: true`.
+**Why:** Write operations are where damage can happen. Killarr cannot modify your library, change settings, or access download clients. Both write operations match actions you would take manually in the \*arr UI, and both can be disabled by omitting a category (or setting it to `{}`) or using `dry_run: true`.
 
 ### 4. Test Coverage as Documentation
 
-**Decision:** 376 tests covering all code paths including error conditions.
+**Decision:** 473 tests covering all code paths including error conditions.
 
 **Why:** Tests serve three purposes:
 1. Prevent regressions.
@@ -294,7 +296,7 @@ Killarr operates entirely within your local network:
 
 **Choice:** Fetch the full queue and filter locally for `trackedDownloadStatus == "warning"`. Dead downloads that never reach that status are detected locally too, from `trackedDownloadState`, `sizeleft`, and the download client `status`, after the `dead_download_minutes` grace period.
 
-**Why:** The \*arr queue API does not expose this field as a server-side filter. Client-side filtering keeps the logic visible, testable, and consistent across all three \*arr applications. See [Client-Side Filtering Rationale](#client-side-filtering-rationale).
+**Why:** The \*arr queue API does not expose these fields as a server-side filter. Client-side filtering keeps the logic visible, testable, and consistent across all five \*arr applications. See [Client-Side Filtering Rationale](#client-side-filtering-rationale).
 
 ### Stateless Operation
 
@@ -316,7 +318,7 @@ Every line of AI-generated code was reviewed, tested, and validated against requ
 
 ## Testing Strategy
 
-**Test Coverage:** 376 tests, 99.47% coverage.
+**Test Coverage:** 473 tests, 99.52% coverage.
 
 - `tests/unit/test_config_parser.py`: Configuration validation, schema defaults, shared config, env var mode — no network calls.
 - `tests/unit/test_validators.py`: Schema validation and setting constraints — no network calls.
@@ -354,14 +356,14 @@ Development (see `requirements-dev.txt`):
 
 ## File Sizes
 
-- `killarr/main.py`: 391 lines
-- `killarr/classifier.py`: 87 lines
-- `killarr/config_parser.py`: 266 lines
-- `killarr/validators.py`: 197 lines
-- `killarr/clients/arr.py`: 481 lines
+- `killarr/main.py`: 402 lines
+- `killarr/classifier.py`: 88 lines
+- `killarr/config_parser.py`: 275 lines
+- `killarr/validators.py`: 225 lines
+- `killarr/clients/arr.py`: 552 lines
 - `killarr/__init__.py`: 1 line (package marker)
 - `killarr/clients/__init__.py`: 1 line (package marker)
-- **Total:** ~1,422 lines of Python
+- **Total:** ~1,544 lines of Python
 
 The small codebase size makes comprehensive security auditing feasible.
 
@@ -372,9 +374,9 @@ The small codebase size makes comprehensive security auditing feasible.
 Don't trust documentation — verify the claims:
 
 1. **Run the tests:** `pytest` — see that security-relevant code is tested.
-2. **Read the code:** Start with `killarr/main.py` — 383 lines.
+2. **Read the code:** Start with `killarr/main.py` — 402 lines.
 3. **Check the API calls:** Enable `LOG_LEVEL=DEBUG` — every HTTP request and detailed skip reasons are logged.
-4. **Observe the cycle:** Look for cycle summaries in the logs (`Found X items to remove (Evaluated: Y, Skipped: Z)`) to confirm operation.
+4. **Observe the cycle:** Look for cycle summaries in the logs (`Found X items to remove (Evaluated: Y, Skipped: Z)`, with `, Dead pending: N` appended while dead-download candidates wait out their grace period) to confirm operation.
 5. **Review dependencies:** `cat requirements.txt` — two libraries, both standard.
 
 If anything in this document contradicts the code, the code is correct and this document needs updating. File an issue.

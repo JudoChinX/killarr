@@ -137,7 +137,7 @@ def build_arr_clients(...): ...
 | Public module constant | `UPPER_CASE` | `ENDPOINT_QUEUE`, `SETTINGS_SCHEMA` |
 | Private module constant | `_UPPER_CASE` | `_CLIENT_MAP` |
 | Class | `PascalCase` | `ArrClient`, `RadarrClient`, `ClientBuilder` |
-| Type alias | `type Name = ...` | `type QueueItem = tuple[int, int, str, str]` |
+| Type alias | `type Name = ...` | `type ActionFlags = dict[str, bool]` |
 | Test case dict | `_snake_case_cases` | `_parse_config_cases`, `_is_stalled_cases` |
 | Builder class | `<Subject>Builder` | `ClientBuilder`, `RadarrQueueBuilder` |
 
@@ -185,7 +185,7 @@ _CLIENT_MAP: dict[str, type[ArrClient]] = {
     'sonarr': SonarrClient,
 }
 
-type QueueItem = tuple[int, int, str, str]
+type ActionFlags = dict[str, bool]
 
 
 def _get_setting(settings: dict, key: str) -> Any:
@@ -317,11 +317,11 @@ def _get_setting(settings, key): ...
 Use the `type` keyword (Python 3.12+ PEP 695 syntax) for module-level type aliases.
 
 ```python
-# Do (from arr.py)
-type QueueItem = tuple[int, int, str, str]
+# Do
+type ActionFlags = dict[str, bool]
 
 # Don't
-QueueItem = tuple[int, int, str, str]
+ActionFlags = dict[str, bool]
 ```
 
 ### Self for Fluent Builders

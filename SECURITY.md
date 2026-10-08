@@ -30,16 +30,16 @@ The only direct dependencies are [`requests`](https://github.com/psf/requests) a
 
 ## What Killarr Accesses
 
-Killarr interacts exclusively with your configured Radarr, Sonarr, and Lidarr instances through their official APIs. Specifically:
+Killarr interacts exclusively with your configured Radarr, Readarr, Sonarr, Lidarr, and Whisparr instances through their official APIs. Specifically:
 
 **API Endpoints Called:**
 
 | Endpoint | Method | Purpose | When Called |
 |---|---|---|---|
-| `/api/v3/queue` (or `/api/v1/queue` for Lidarr) | GET | Fetch all queue records; filtered client-side for `trackedDownloadStatus == "warning"` | Every cycle |
-| `/api/v3/queue/{id}` (or `/api/v1/queue/{id}` for Lidarr) | DELETE | Remove a stalled queue item; optional `removeFromClient` and `blocklist` params | Per stalled item found |
-| `/api/v3/command` (or `/api/v1/command` for Lidarr) | POST | Trigger a fresh search (`MoviesSearch`, `EpisodeSearch`, or `AlbumSearch`) | Per removal, only if action is `retry` or `blocklist` |
-| `/api/v3/tag` (or `/api/v1/tag` for Lidarr) | GET | Resolve configured tag names to IDs | Startup only, if `include_tags` or `exclude_tags` are configured |
+| `/api/v3/queue` (or `/api/v1/queue` for Lidarr and Readarr) | GET | Fetch all queue records; filtered client-side for `trackedDownloadStatus == "warning"`, plus dead-download candidates (`trackedDownloadState == "downloading"` with `sizeleft == 0` or client `status == "warning"`) that have persisted for `dead_download_minutes` | Every cycle |
+| `/api/v3/queue/{id}` (or `/api/v1/queue/{id}` for Lidarr and Readarr) | DELETE | Remove a stalled queue item; optional `removeFromClient` and `blocklist` params | Per stalled item found |
+| `/api/v3/command` (or `/api/v1/command` for Lidarr and Readarr) | POST | Trigger a fresh search (`MoviesSearch`, `BookSearch`, `EpisodeSearch`, or `AlbumSearch`) | Per removal, only if the resolved action has `search: true` |
+| `/api/v3/tag` (or `/api/v1/tag` for Lidarr and Readarr) | GET | Startup connection check; resolve configured tag names to IDs | Startup only (tag resolution only if `include_tags` or `exclude_tags` are configured) |
 
 **Data Accessed:**
 - Queue metadata only: titles, IDs, download status, status messages
@@ -49,7 +49,7 @@ Killarr interacts exclusively with your configured Radarr, Sonarr, and Lidarr in
 **Write Operations:**
 The DELETE and POST operations are the only mutations Killarr performs:
 - **DELETE** removes the stalled item from the \*arr queue. This is the same action as clicking "Remove" in the \*arr web interface.
-- **POST** triggers a fresh search command — the same as clicking "Search" manually. This only happens when the resolved action for a stall is `retry` or `blocklist`.
+- **POST** triggers a fresh search command — the same as clicking "Search" manually. This only happens when the resolved action flags for a stall include `search: true`.
 
 Killarr does not:
 - Modify library settings or quality profiles
