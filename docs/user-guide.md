@@ -770,9 +770,13 @@ See the [Style Guide](style-guide.md) for detailed coding conventions.
 git clone https://github.com/JudoChinX/killarr.git
 cd killarr
 
+# Create a Python 3.13 virtual environment
+python3.13 -m venv .venv
+source .venv/bin/activate
+
 # Install all dependencies (including dev)
-uv sync
+pip install -r requirements-dev.txt
 
 # Run the test suite
-uv run pytest
+pytest
 ```
