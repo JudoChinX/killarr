@@ -44,4 +44,3 @@ docs/*/
 .worktrees/
 CLAUDE.md
 GEMINI.md
-.claude/worktrees/
