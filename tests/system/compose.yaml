@@ -1,3 +1,5 @@
+name: killarr-system-test
+
 services:
   radarr:
     image: linuxserver/radarr:latest
